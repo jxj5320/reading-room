@@ -277,6 +277,10 @@
     border: 1px solid var(--line);
     margin-bottom: 22px;
     display: block;
+    filter: none;
+    opacity: 1;
+    background: #fff;
+    -webkit-filter: none;
   }
 
   .overlay-stage {
@@ -292,6 +296,7 @@
     font-size: 22px;
     line-height: 2;
     color: var(--dim);
+    white-space: pre-wrap;
   }
 
   .word {
@@ -316,6 +321,7 @@
     <div class="left">
       <h1>English Reading Room</h1>
       <span class="status" id="status">idle</span>
+      <span class="status" id="playCountEl">재생 0회</span>
     </div>
     <button class="gear-btn" id="gearBtn" title="Polly 설정">⚙</button>
   </header>
@@ -412,6 +418,7 @@
     </div>
     <div class="status-line" id="overlayStatus"></div>
     <div class="overlay-controls">
+      <button id="playOverlayBtn" disabled>Play</button>
       <button id="stopBtn" class="secondary" disabled>Stop</button>
       <button id="downloadBtn" class="secondary" disabled>mp3 다운로드</button>
     </div>
@@ -448,6 +455,8 @@ const closeOverlayBtn = document.getElementById('closeOverlayBtn');
 const pollyRegion = document.getElementById('pollyRegion');
 const pollyEngine = document.getElementById('pollyEngine');
 const pollyVoice = document.getElementById('pollyVoice');
+const playOverlayBtn = document.getElementById('playOverlayBtn');
+const playCountEl = document.getElementById('playCountEl');
 
 let wordSpans = [];
 let spokenSpans = [];
@@ -455,6 +464,12 @@ let attachedImageData = null;
 let pollyMarks = [];
 let pollyAudioUrl = null;
 let rafId = null;
+let playCount = 0;
+let audioReady = false;
+
+function updatePlayCountDisplay() {
+  playCountEl.textContent = `재생 ${playCount}회`;
+}
 
 /* ---------- persistence (text, image, settings — never the AWS keys) ---------- */
 function saveState() {
@@ -465,7 +480,8 @@ function saveState() {
       region: pollyRegion.value,
       engine: pollyEngine.value,
       voice: pollyVoice.value,
-      rate: rateSelect.value
+      rate: rateSelect.value,
+      playCount: playCount
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) { /* storage full or unavailable — ignore */ }
@@ -482,9 +498,11 @@ function loadState() {
     if (state.engine) pollyEngine.value = state.engine;
     if (state.voice) pollyVoice.value = state.voice;
     if (state.rate) rateSelect.value = state.rate;
+    if (typeof state.playCount === 'number') playCount = state.playCount;
   } catch (e) { /* ignore corrupt data */ }
 }
 loadState();
+updatePlayCountDisplay();
 
 input.addEventListener('input', saveState);
 [pollyRegion, pollyEngine, pollyVoice, rateSelect].forEach(el => el.addEventListener('change', saveState));
@@ -564,6 +582,7 @@ function setReading(isReading) {
   playBtn.disabled = isReading;
   stopBtn.disabled = !isReading;
   stopBtnMain.disabled = !isReading;
+  playOverlayBtn.disabled = isReading || !audioReady;
   statusEl.textContent = isReading ? 'reading…' : 'idle';
 }
 
@@ -670,6 +689,8 @@ async function playPolly() {
   openOverlay();
   setStatus('Polly에 요청 중…', '');
   playBtn.disabled = true;
+  audioReady = false;
+  playOverlayBtn.disabled = true;
   setDownloadEnabled(false);
 
   const speakText = spokenSpans.map(s => s.textContent).join(' ');
@@ -700,28 +721,18 @@ async function playPolly() {
     pollyAudioUrl = URL.createObjectURL(blob);
     audioPlayer.src = pollyAudioUrl;
 
-    setStatus('완료. 재생을 시작해요.', 'ok');
     setDownloadEnabled(true);
-
-    audioPlayer.currentTime = 0;
-    setReading(true);
-    audioPlayer.play();
-
-    const step = () => {
-      const ms = audioPlayer.currentTime * 1000;
-      let idx = -1;
-      for (let i = 0; i < pollyMarks.length; i++) {
-        if (pollyMarks[i].time <= ms) idx = i; else break;
-      }
-      if (idx >= 0) highlightSpokenIndex(idx);
-      if (!audioPlayer.paused && !audioPlayer.ended) rafId = requestAnimationFrame(step);
-    };
-    rafId = requestAnimationFrame(step);
+    audioReady = true;
+    playOverlayBtn.disabled = false;
+    setStatus('준비 완료. Play를 눌러 재생하세요.', 'ok');
 
     audioPlayer.onended = () => {
       setReading(false);
       spokenSpans.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
       if (rafId) cancelAnimationFrame(rafId);
+      playCount += 1;
+      updatePlayCountDisplay();
+      saveState();
     };
   } catch (err) {
     setStatus(err.message || String(err), 'err');
@@ -731,7 +742,27 @@ async function playPolly() {
   }
 }
 
+function startPlayback() {
+  if (!audioReady) return;
+  clearHighlight();
+  audioPlayer.currentTime = 0;
+  setReading(true);
+  audioPlayer.play();
+
+  const step = () => {
+    const ms = audioPlayer.currentTime * 1000;
+    let idx = -1;
+    for (let i = 0; i < pollyMarks.length; i++) {
+      if (pollyMarks[i].time <= ms) idx = i; else break;
+    }
+    if (idx >= 0) highlightSpokenIndex(idx);
+    if (!audioPlayer.paused && !audioPlayer.ended) rafId = requestAnimationFrame(step);
+  };
+  rafId = requestAnimationFrame(step);
+}
+
 playBtn.addEventListener('click', playPolly);
+playOverlayBtn.addEventListener('click', startPlayback);
 
 function stopReading() {
   audioPlayer.pause();
@@ -770,6 +801,10 @@ resetBtn.addEventListener('click', () => {
   if (pollyAudioUrl) { URL.revokeObjectURL(pollyAudioUrl); pollyAudioUrl = null; }
   audioPlayer.removeAttribute('src');
   setDownloadEnabled(false);
+  audioReady = false;
+  playOverlayBtn.disabled = true;
+  playCount = 0;
+  updatePlayCountDisplay();
   setStatus('', '');
   try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
 });
