@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>English Reading Room</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+  :root {
+    --ink: #2b2620;
+    --paper: #faf7f1;
+    --line: #e4ddd0;
+    --accent: #7a8c6f;
+    --accent-soft: #e7ede2;
+    --dim: #9a9184;
+    --err: #b1543f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 60px;
+  }
+
+  .room {
+    width: 100%;
+    max-width: 640px;
+  }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 14px;
+    margin-bottom: 28px;
+  }
+
+  header h1 {
+    font-family: 'Source Serif 4', serif;
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  header span {
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 96px;
+    resize: vertical;
+    font-family: 'Source Serif 4', serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--ink);
+  }
+
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .engine-toggle {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .engine-toggle label {
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--dim);
+  }
+
+  .engine-toggle input { display: none; }
+
+  .engine-toggle input:checked + span {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .engine-toggle label.active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+
+  .polly-panel {
+    display: none;
+    margin-top: 14px;
+    padding: 16px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+
+  .polly-panel.visible { display: block; }
+
+  .polly-panel .row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .polly-panel .row > div {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .polly-panel label.field-label {
+    display: block;
+    font-size: 11px;
+    color: var(--dim);
+    margin-bottom: 4px;
+  }
+
+  .polly-panel input[type="text"],
+  .polly-panel input[type="password"],
+  .polly-panel select {
+    width: 100%;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+  }
+
+  .polly-note {
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.6;
+    margin-top: 4px;
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 9px 18px;
+    border-radius: 4px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+    cursor: pointer;
+  }
+
+  button.secondary {
+    background: transparent;
+    color: var(--ink);
+  }
+
+  button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  select {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+  }
+
+  .rate-label {
+    font-size: 12px;
+    color: var(--dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .stage {
+    margin-top: 32px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 30px 28px;
+    min-height: 160px;
+  }
+
+  .stage.empty::before {
+    content: "Paste or type English text above, then press Read.";
+    color: var(--dim);
+    font-family: 'Source Serif 4', serif;
+    font-style: italic;
+  }
+
+  .phrase {
+    font-family: 'Source Serif 4', serif;
+    font-size: 19px;
+    line-height: 1.85;
+    max-width: 46ch;
+    color: var(--dim);
+  }
+
+  .word {
+    transition: color 0.15s ease, background-color 0.15s ease;
+    border-radius: 3px;
+    padding: 0 1px;
+  }
+
+  .word.active {
+    color: var(--ink);
+    background: var(--accent-soft);
+  }
+
+  .word.done {
+    color: var(--ink);
+  }
+
+  .status-line {
+    margin-top: 10px;
+    font-size: 12px;
+    min-height: 16px;
+  }
+
+  .status-line.err { color: var(--err); }
+  .status-line.ok { color: var(--accent); }
+
+  footer {
+    margin-top: 22px;
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div class="room">
+  <header>
+    <h1>English Reading Room</h1>
+    <span id="status">idle</span>
+  </header>
+
+  <textarea id="input" placeholder="Through examples of democracy in local communities, we'll learn about the importance of local self-governance and resident participation.">Through examples of democracy in local communities, we'll learn about the importance of local self-governance and resident participation.</textarea>
+
+  <div class="engine-toggle">
+    <label id="engineBrowserLabel" class="active">
+      <input type="radio" name="engine" value="browser" checked>
+      <span>브라우저 음성 (무료)</span>
+    </label>
+    <label id="enginePollyLabel">
+      <input type="radio" name="engine" value="polly">
+      <span>Amazon Polly (실제 음성)</span>
+    </label>
+  </div>
+
+  <div class="polly-panel" id="pollyPanel">
+    <div class="row">
+      <div>
+        <label class="field-label">AWS Access Key ID</label>
+        <input type="text" id="pollyAccessKey" autocomplete="off" placeholder="AKIA...">
+      </div>
+      <div>
+        <label class="field-label">AWS Secret Access Key</label>
+        <input type="password" id="pollySecretKey" autocomplete="off" placeholder="••••••••">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label class="field-label">리전</label>
+        <select id="pollyRegion">
+          <option value="us-east-1">us-east-1 (N. Virginia)</option>
+          <option value="us-west-2">us-west-2 (Oregon)</option>
+          <option value="ap-northeast-2">ap-northeast-2 (Seoul)</option>
+          <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+          <option value="eu-west-1">eu-west-1 (Ireland)</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">엔진</label>
+        <select id="pollyEngine">
+          <option value="neural" selected>neural (자연스러움, 지역 제한 있음)</option>
+          <option value="standard">standard (모든 리전 가능)</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">목소리</label>
+        <select id="pollyVoice">
+          <option value="Joanna">Joanna (미국 여)</option>
+          <option value="Matthew">Matthew (미국 남)</option>
+          <option value="Ivy">Ivy (미국 여, 아동톤)</option>
+          <option value="Kendra">Kendra (미국 여)</option>
+          <option value="Justin">Justin (미국 남, 아동톤)</option>
+          <option value="Amy">Amy (영국 여)</option>
+          <option value="Brian">Brian (영국 남)</option>
+          <option value="Emma">Emma (영국 여)</option>
+        </select>
+      </div>
+    </div>
+    <div class="polly-note">
+      키는 저장되지 않고 이 창을 새로고침하면 사라져요. IAM에서 <b>polly:SynthesizeSpeech</b> 권한만 있는 전용 사용자 키를 쓰는 걸 권장해요(루트 키 X).
+      neural 엔진은 리전마다 지원 여부가 달라서 오류가 나면 standard로 바꿔보세요.
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="playBtn">Read aloud</button>
+    <button id="stopBtn" class="secondary" disabled>Stop</button>
+    <button id="downloadBtn" class="secondary" disabled>mp3 다운로드</button>
+    <select id="voiceSelect"></select>
+    <label class="rate-label">
+      Speed
+      <select id="rateSelect">
+        <option value="0.75">0.75x</option>
+        <option value="0.9">0.9x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.15">1.15x</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="status-line" id="pollyStatus"></div>
+
+  <div class="stage empty" id="stage">
+    <div class="phrase" id="phrase"></div>
+  </div>
+  <audio id="audioPlayer" style="display:none;"></audio>
+
+  <footer>
+    브라우저 음성은 Web Speech API, Polly 음성은 이 브라우저에서 직접 Amazon Polly API를 SigV4로 서명해 호출해서
+    실제 mp3 오디오와 단어별 타이밍(Speech Marks)을 받아온 뒤, 그 타이밍에 맞춰 단어를 하이라이트해요.
+    생성된 mp3는 다운로드 버튼으로 저장할 수 있어요.
+  </footer>
+</div>
+
+<script>
+const input = document.getElementById('input');
+const stage = document.getElementById('stage');
+const phraseEl = document.getElementById('phrase');
+const playBtn = document.getElementById('playBtn');
+const stopBtn = document.getElementById('stopBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const voiceSelect = document.getElementById('voiceSelect');
+const rateSelect = document.getElementById('rateSelect');
+const statusEl = document.getElementById('status');
+const pollyStatus = document.getElementById('pollyStatus');
+const pollyPanel = document.getElementById('pollyPanel');
+const audioPlayer = document.getElementById('audioPlayer');
+const engineBrowserLabel = document.getElementById('engineBrowserLabel');
+const enginePollyLabel = document.getElementById('enginePollyLabel');
+
+let voices = [];
+let utterance = null;
+let wordSpans = [];
+let currentEngine = 'browser';
+let pollyMarks = [];
+let pollyAudioUrl = null;
+let rafId = null;
+
+/* ---------- engine toggle ---------- */
+document.querySelectorAll('input[name="engine"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    currentEngine = radio.value;
+    pollyPanel.classList.toggle('visible', currentEngine === 'polly');
+    voiceSelect.style.display = currentEngine === 'polly' ? 'none' : '';
+    engineBrowserLabel.classList.toggle('active', currentEngine === 'browser');
+    enginePollyLabel.classList.toggle('active', currentEngine === 'polly');
+    setPollyStatus('', '');
+  });
+});
+
+/* ---------- browser TTS voices ---------- */
+function populateVoices() {
+  voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+  voiceSelect.innerHTML = '';
+  if (voices.length === 0) {
+    const opt = document.createElement('option');
+    opt.textContent = 'Loading voices…';
+    voiceSelect.appendChild(opt);
+    return;
+  }
+  voices.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${v.name} (${v.lang})`;
+    voiceSelect.appendChild(opt);
+  });
+  const preferred = voices.findIndex(v => /Natural|Neural|Google US English|Samantha/i.test(v.name));
+  if (preferred >= 0) voiceSelect.value = preferred;
+}
+speechSynthesis.onvoiceschanged = populateVoices;
+populateVoices();
+
+/* ---------- shared word-stage rendering ---------- */
+function buildPhrase(text) {
+  stage.classList.remove('empty');
+  phraseEl.innerHTML = '';
+  wordSpans = [];
+  const tokens = text.split(/(\s+)/);
+  let charOffset = 0;
+  tokens.forEach(tok => {
+    if (tok.trim() === '') {
+      phraseEl.appendChild(document.createTextNode(tok));
+    } else {
+      const span = document.createElement('span');
+      span.className = 'word';
+      span.textContent = tok;
+      span.dataset.start = charOffset;
+      span.dataset.end = charOffset + tok.length;
+      phraseEl.appendChild(span);
+      wordSpans.push(span);
+    }
+    charOffset += tok.length;
+  });
+}
+
+function clearHighlight() {
+  wordSpans.forEach(s => s.classList.remove('active', 'done'));
+}
+
+function highlightAt(charIndex) {
+  wordSpans.forEach(s => {
+    const start = Number(s.dataset.start);
+    const end = Number(s.dataset.end);
+    if (charIndex >= start && charIndex < end) {
+      s.classList.add('active');
+      s.classList.remove('done');
+    } else if (charIndex >= end) {
+      s.classList.add('done');
+      s.classList.remove('active');
+    } else {
+      s.classList.remove('active', 'done');
+    }
+  });
+}
+
+function setReading(isReading) {
+  playBtn.disabled = isReading;
+  stopBtn.disabled = !isReading;
+  statusEl.textContent = isReading ? 'reading…' : 'idle';
+}
+
+function setPollyStatus(msg, kind) {
+  pollyStatus.textContent = msg;
+  pollyStatus.className = 'status-line' + (kind ? ' ' + kind : '');
+}
+
+/* ---------- browser TTS playback ---------- */
+function playBrowser(text) {
+  speechSynthesis.cancel();
+  buildPhrase(text);
+
+  utterance = new SpeechSynthesisUtterance(text);
+  const idx = Number(voiceSelect.value);
+  if (voices[idx]) utterance.voice = voices[idx];
+  utterance.rate = Number(rateSelect.value);
+
+  utterance.onboundary = (e) => {
+    if (e.name === 'word' || e.charIndex !== undefined) {
+      highlightAt(e.charIndex);
+    }
+  };
+  utterance.onstart = () => setReading(true);
+  utterance.onend = () => {
+    setReading(false);
+    wordSpans.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+  };
+  utterance.onerror = () => setReading(false);
+
+  speechSynthesis.speak(utterance);
+}
+
+/* ---------- AWS SigV4 helpers (Web Crypto) ---------- */
+function toHex(buf) {
+  return Array.prototype.map.call(new Uint8Array(buf), b => ('00' + b.toString(16)).slice(-2)).join('');
+}
+async function sha256Hex(str) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return toHex(digest);
+}
+async function hmacRaw(keyBytes, msg) {
+  const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(msg));
+}
+async function getSigningKey(secretKey, dateStamp, region, service) {
+  const kDate = await hmacRaw(new TextEncoder().encode('AWS4' + secretKey), dateStamp);
+  const kRegion = await hmacRaw(kDate, region);
+  const kService = await hmacRaw(kRegion, service);
+  return hmacRaw(kService, 'aws4_request');
+}
+function amzDateNow() {
+  return new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+}
+
+async function pollySignedFetch({ accessKey, secretKey, region, bodyObj }) {
+  const service = 'polly';
+  const host = `polly.${region}.amazonaws.com`;
+  const path = '/v1/speech';
+  const amzDate = amzDateNow();
+  const dateStamp = amzDate.slice(0, 8);
+  const bodyStr = JSON.stringify(bodyObj);
+  const payloadHash = await sha256Hex(bodyStr);
+  const canonicalHeaders = `content-type:application/json\nhost:${host}\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = 'content-type;host;x-amz-date';
+  const canonicalRequest = `POST\n${path}\n\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = `AWS4-HMAC-SHA256\n${amzDate}\n${credentialScope}\n${await sha256Hex(canonicalRequest)}`;
+  const signingKey = await getSigningKey(secretKey, dateStamp, region, service);
+  const signature = toHex(await hmacRaw(signingKey, stringToSign));
+  const authorization = `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const res = await fetch(`https://${host}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Amz-Date': amzDate,
+      'Authorization': authorization
+    },
+    body: bodyStr
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Polly ${res.status}: ${errText.slice(0, 300)}`);
+  }
+  return res;
+}
+
+/* ---------- Polly playback ---------- */
+async function playPolly(text) {
+  const accessKey = document.getElementById('pollyAccessKey').value.trim();
+  const secretKey = document.getElementById('pollySecretKey').value.trim();
+  const region = document.getElementById('pollyRegion').value;
+  const engine = document.getElementById('pollyEngine').value;
+  const voiceId = document.getElementById('pollyVoice').value;
+
+  if (!accessKey || !secretKey) {
+    setPollyStatus('Access Key와 Secret Key를 입력해주세요.', 'err');
+    return;
+  }
+
+  buildPhrase(text);
+  setPollyStatus('Polly에 요청 중…', '');
+  playBtn.disabled = true;
+  downloadBtn.disabled = true;
+
+  try {
+    const baseBody = { Text: text, VoiceId: voiceId, Engine: engine, TextType: 'text' };
+
+    const marksRes = await pollySignedFetch({
+      accessKey, secretKey, region,
+      bodyObj: { ...baseBody, OutputFormat: 'json', SpeechMarkTypes: ['word'] }
+    });
+    const marksText = await marksRes.text();
+    pollyMarks = marksText.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+
+    const audioRes = await pollySignedFetch({
+      accessKey, secretKey, region,
+      bodyObj: { ...baseBody, OutputFormat: 'mp3' }
+    });
+    const audioBuf = await audioRes.arrayBuffer();
+    const blob = new Blob([audioBuf], { type: 'audio/mpeg' });
+    if (pollyAudioUrl) URL.revokeObjectURL(pollyAudioUrl);
+    pollyAudioUrl = URL.createObjectURL(blob);
+    audioPlayer.src = pollyAudioUrl;
+
+    setPollyStatus('완료. 재생을 시작해요.', 'ok');
+    downloadBtn.disabled = false;
+
+    audioPlayer.currentTime = 0;
+    setReading(true);
+    audioPlayer.play();
+
+    const step = () => {
+      const ms = audioPlayer.currentTime * 1000;
+      let current = null;
+      for (const m of pollyMarks) {
+        if (m.time <= ms) current = m; else break;
+      }
+      if (current) highlightAt(current.start);
+      if (!audioPlayer.paused && !audioPlayer.ended) {
+        rafId = requestAnimationFrame(step);
+      }
+    };
+    rafId = requestAnimationFrame(step);
+
+    audioPlayer.onended = () => {
+      setReading(false);
+      wordSpans.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  } catch (err) {
+    setPollyStatus(err.message || String(err), 'err');
+    setReading(false);
+  } finally {
+    playBtn.disabled = false;
+  }
+}
+
+/* ---------- controls ---------- */
+playBtn.addEventListener('click', () => {
+  const text = input.value.trim();
+  if (!text) return;
+  if (currentEngine === 'browser') {
+    playBrowser(text);
+  } else {
+    playPolly(text);
+  }
+});
+
+stopBtn.addEventListener('click', () => {
+  if (currentEngine === 'browser') {
+    speechSynthesis.cancel();
+  } else {
+    audioPlayer.pause();
+    audioPlayer.currentTime = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+  }
+  setReading(false);
+  clearHighlight();
+});
+
+downloadBtn.addEventListener('click', () => {
+  if (!pollyAudioUrl) return;
+  const a = document.createElement('a');
+  a.href = pollyAudioUrl;
+  const firstWords = input.value.trim().split(/\s+/).slice(0, 4).join('_').replace(/[^\w-]/g, '');
+  a.download = `${firstWords || 'reading'}.mp3`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+</script>
+</body>
+</html>
