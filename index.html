@@ -293,19 +293,20 @@
 
   .overlay-phrase {
     font-family: 'Source Serif 4', serif;
-    font-size: 22px;
-    line-height: 2;
-    color: var(--dim);
+    font-size: 20px;
+    line-height: 1.75;
     white-space: pre-wrap;
   }
 
+  .word.en { color: var(--ink); font-weight: 600; }
+  .word.ko { color: var(--dim); font-weight: 400; }
+  .word.active { background: var(--accent-soft); }
+
   .word {
-    transition: color 0.15s ease, background-color 0.15s ease;
+    transition: background-color 0.15s ease;
     border-radius: 3px;
     padding: 0 1px;
   }
-  .word.active { color: var(--ink); background: var(--accent-soft); }
-  .word.done { color: var(--ink); }
 
   .overlay-controls {
     display: flex;
@@ -327,49 +328,60 @@
   </header>
 
   <div class="settings-panel" id="settingsPanel">
-    <h2>Amazon Polly 설정</h2>
-    <div class="field">
-      <label>AWS Access Key ID</label>
-      <input type="text" id="pollyAccessKey" autocomplete="off" placeholder="AKIA...">
+    <div id="lockView">
+      <h2>🔒 설정 잠금</h2>
+      <div class="field">
+        <label>암호 4자리</label>
+        <input type="password" id="lockPassword" inputmode="numeric" maxlength="4" placeholder="••••">
+      </div>
+      <div class="settings-note" id="lockError" style="color: var(--err); display:none;">암호가 틀렸어요.</div>
+      <button class="settings-close" id="unlockBtn">확인</button>
     </div>
-    <div class="field">
-      <label>AWS Secret Access Key</label>
-      <input type="password" id="pollySecretKey" autocomplete="off" placeholder="••••••••">
+    <div id="settingsView" style="display:none;">
+      <h2>Amazon Polly 설정</h2>
+      <div class="field">
+        <label>AWS Access Key ID</label>
+        <input type="text" id="pollyAccessKey" autocomplete="off" placeholder="AKIA...">
+      </div>
+      <div class="field">
+        <label>AWS Secret Access Key</label>
+        <input type="password" id="pollySecretKey" autocomplete="off" placeholder="••••••••">
+      </div>
+      <div class="field">
+        <label>리전</label>
+        <select id="pollyRegion">
+          <option value="us-east-1">us-east-1 (N. Virginia)</option>
+          <option value="us-west-2">us-west-2 (Oregon)</option>
+          <option value="ap-northeast-2">ap-northeast-2 (Seoul)</option>
+          <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+          <option value="eu-west-1">eu-west-1 (Ireland)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>엔진</label>
+        <select id="pollyEngine">
+          <option value="neural" selected>neural (자연스러움, 리전 제한 있음)</option>
+          <option value="standard">standard (모든 리전 가능)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>목소리</label>
+        <select id="pollyVoice">
+          <option value="Joanna">Joanna (미국 여)</option>
+          <option value="Matthew">Matthew (미국 남)</option>
+          <option value="Ivy">Ivy (미국 여, 아동톤)</option>
+          <option value="Kendra">Kendra (미국 여)</option>
+          <option value="Justin">Justin (미국 남, 아동톤)</option>
+          <option value="Amy">Amy (영국 여)</option>
+          <option value="Brian">Brian (영국 남)</option>
+          <option value="Emma">Emma (영국 여)</option>
+        </select>
+      </div>
+      <div class="settings-note">
+        키는 저장되지 않고 새로고침하면 사라져요(보안). 나머지 설정과 입력한 텍스트, 사진은 이 브라우저에 저장돼서 다시 들어와도 남아있어요.
+      </div>
+      <button class="settings-close" id="settingsCloseBtn">닫기</button>
     </div>
-    <div class="field">
-      <label>리전</label>
-      <select id="pollyRegion">
-        <option value="us-east-1">us-east-1 (N. Virginia)</option>
-        <option value="us-west-2">us-west-2 (Oregon)</option>
-        <option value="ap-northeast-2">ap-northeast-2 (Seoul)</option>
-        <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
-        <option value="eu-west-1">eu-west-1 (Ireland)</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>엔진</label>
-      <select id="pollyEngine">
-        <option value="neural" selected>neural (자연스러움, 리전 제한 있음)</option>
-        <option value="standard">standard (모든 리전 가능)</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>목소리</label>
-      <select id="pollyVoice">
-        <option value="Joanna">Joanna (미국 여)</option>
-        <option value="Matthew">Matthew (미국 남)</option>
-        <option value="Ivy">Ivy (미국 여, 아동톤)</option>
-        <option value="Kendra">Kendra (미국 여)</option>
-        <option value="Justin">Justin (미국 남, 아동톤)</option>
-        <option value="Amy">Amy (영국 여)</option>
-        <option value="Brian">Brian (영국 남)</option>
-        <option value="Emma">Emma (영국 여)</option>
-      </select>
-    </div>
-    <div class="settings-note">
-      키는 저장되지 않고 새로고침하면 사라져요(보안). 나머지 설정과 입력한 텍스트, 사진은 이 브라우저에 저장돼서 다시 들어와도 남아있어요.
-    </div>
-    <button class="settings-close" id="settingsCloseBtn">닫기</button>
   </div>
 
   <textarea id="input" placeholder="영어와 한글 번역이 섞여 있어도 괜찮아요. 영어만 읽어드려요.">Through examples of democracy in local communities, we'll learn about the importance of local self-governance and resident participation.</textarea>
@@ -460,6 +472,8 @@ const playCountEl = document.getElementById('playCountEl');
 
 let wordSpans = [];
 let spokenSpans = [];
+let spokenIndexToGroup = [];
+let groups = [];
 let attachedImageData = null;
 let pollyMarks = [];
 let pollyAudioUrl = null;
@@ -533,12 +547,44 @@ removeImageBtn.addEventListener('click', () => {
   saveState();
 });
 
-/* ---------- settings panel toggle ---------- */
-gearBtn.addEventListener('click', () => settingsPanel.classList.toggle('open'));
-settingsCloseBtn.addEventListener('click', () => settingsPanel.classList.remove('open'));
+/* ---------- settings panel toggle + child lock (client-side only) ---------- */
+const LOCK_CODE = '0404';
+const lockView = document.getElementById('lockView');
+const settingsView = document.getElementById('settingsView');
+const lockPassword = document.getElementById('lockPassword');
+const lockError = document.getElementById('lockError');
+const unlockBtn = document.getElementById('unlockBtn');
+
+function showLockView() {
+  lockView.style.display = '';
+  settingsView.style.display = 'none';
+  lockPassword.value = '';
+  lockError.style.display = 'none';
+}
+
+function tryUnlock() {
+  if (lockPassword.value === LOCK_CODE) {
+    lockView.style.display = 'none';
+    settingsView.style.display = '';
+  } else {
+    lockError.style.display = '';
+    lockPassword.value = '';
+    lockPassword.focus();
+  }
+}
+unlockBtn.addEventListener('click', tryUnlock);
+lockPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
+
+gearBtn.addEventListener('click', () => {
+  const opening = !settingsPanel.classList.contains('open');
+  settingsPanel.classList.toggle('open');
+  if (opening) showLockView();
+});
+settingsCloseBtn.addEventListener('click', () => { settingsPanel.classList.remove('open'); showLockView(); });
 document.addEventListener('click', (e) => {
   if (!settingsPanel.contains(e.target) && e.target !== gearBtn && settingsPanel.classList.contains('open')) {
     settingsPanel.classList.remove('open');
+    showLockView();
   }
 });
 
@@ -551,30 +597,51 @@ function buildPhrase(text) {
   overlayPhrase.innerHTML = '';
   wordSpans = [];
   spokenSpans = [];
+  groups = [];
+  spokenIndexToGroup = [];
+  let currentGroup = null;
+  let breakPending = true;
+
   const tokens = text.split(/(\s+)/);
   tokens.forEach(tok => {
     if (tok.trim() === '') {
       overlayPhrase.appendChild(document.createTextNode(tok));
+      return;
+    }
+    const span = document.createElement('span');
+    span.className = 'word';
+    span.textContent = tok;
+    overlayPhrase.appendChild(span);
+    wordSpans.push(span);
+
+    if (hasLatinLetter(tok)) {
+      span.classList.add('en');
+      if (breakPending || currentGroup === null) {
+        currentGroup = [];
+        groups.push(currentGroup);
+        breakPending = false;
+      }
+      currentGroup.push(span);
+      spokenSpans.push(span);
+      spokenIndexToGroup.push(groups.length - 1);
     } else {
-      const span = document.createElement('span');
-      span.className = 'word';
-      span.textContent = tok;
-      overlayPhrase.appendChild(span);
-      wordSpans.push(span);
-      if (hasLatinLetter(tok)) spokenSpans.push(span);
+      span.classList.add('ko');
+      if (tok.trim() !== '/') breakPending = true;
     }
   });
 }
 
 function clearHighlight() {
-  wordSpans.forEach(s => s.classList.remove('active', 'done'));
+  wordSpans.forEach(s => s.classList.remove('active'));
 }
 
 function highlightSpokenIndex(idx) {
-  spokenSpans.forEach((s, i) => {
-    if (i === idx) { s.classList.add('active'); s.classList.remove('done'); }
-    else if (i < idx) { s.classList.add('done'); s.classList.remove('active'); }
-    else { s.classList.remove('active', 'done'); }
+  const activeGroup = spokenIndexToGroup[idx];
+  groups.forEach((grp, gi) => {
+    grp.forEach(span => {
+      if (gi === activeGroup) span.classList.add('active');
+      else span.classList.remove('active');
+    });
   });
 }
 
@@ -682,6 +749,7 @@ async function playPolly() {
   if (!accessKey || !secretKey) {
     setStatus('설정(⚙)에서 Access Key와 Secret Key를 입력해주세요.', 'err');
     settingsPanel.classList.add('open');
+    showLockView();
     return;
   }
 
@@ -728,7 +796,7 @@ async function playPolly() {
 
     audioPlayer.onended = () => {
       setReading(false);
-      spokenSpans.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+      clearHighlight();
       if (rafId) cancelAnimationFrame(rafId);
       playCount += 1;
       updatePlayCountDisplay();
