@@ -277,10 +277,10 @@
     border: 1px solid var(--line);
     margin-bottom: 22px;
     display: block;
-    filter: none;
+    filter: brightness(1.12) saturate(1.05);
     opacity: 1;
     background: #fff;
-    -webkit-filter: none;
+    -webkit-filter: brightness(1.12) saturate(1.05);
   }
 
   .overlay-stage {
@@ -626,7 +626,7 @@ function buildPhrase(text) {
       spokenIndexToGroup.push(groups.length - 1);
     } else {
       span.classList.add('ko');
-      if (tok.trim() !== '/') breakPending = true;
+      breakPending = true;
     }
   });
 }
