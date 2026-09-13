@@ -33,6 +33,7 @@
   .room {
     width: 100%;
     max-width: 640px;
+    position: relative;
   }
 
   header {
@@ -44,6 +45,12 @@
     margin-bottom: 28px;
   }
 
+  header .left {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
   header h1 {
     font-family: 'Source Serif 4', serif;
     font-size: 22px;
@@ -51,9 +58,93 @@
     margin: 0;
   }
 
-  header span {
+  header span.status {
     font-size: 12px;
     color: var(--dim);
+  }
+
+  .gear-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+  }
+
+  .gear-btn:hover { background: var(--accent-soft); }
+
+  .settings-panel {
+    display: none;
+    position: absolute;
+    top: 54px;
+    right: 0;
+    z-index: 20;
+    width: 300px;
+    max-width: calc(100vw - 32px);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+    padding: 18px;
+  }
+
+  .settings-panel.open { display: block; }
+
+  .settings-panel h2 {
+    font-size: 14px;
+    margin: 0 0 12px;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+
+  .field {
+    margin-bottom: 12px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    color: var(--dim);
+    margin-bottom: 4px;
+  }
+
+  .field input[type="text"],
+  .field input[type="password"],
+  .field select {
+    width: 100%;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+  }
+
+  .settings-note {
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.6;
+    margin-top: 4px;
+  }
+
+  .settings-close {
+    width: 100%;
+    margin-top: 6px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+    cursor: pointer;
   }
 
   textarea {
@@ -71,85 +162,6 @@
   }
 
   textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-  .engine-toggle {
-    display: flex;
-    gap: 8px;
-    margin-top: 16px;
-  }
-
-  .engine-toggle label {
-    flex: 1;
-    text-align: center;
-    font-size: 13px;
-    padding: 8px;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    cursor: pointer;
-    color: var(--dim);
-  }
-
-  .engine-toggle input { display: none; }
-
-  .engine-toggle input:checked + span {
-    color: var(--ink);
-    font-weight: 600;
-  }
-
-  .engine-toggle label.active {
-    background: var(--accent-soft);
-    border-color: var(--accent);
-  }
-
-  .polly-panel {
-    display: none;
-    margin-top: 14px;
-    padding: 16px;
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-  }
-
-  .polly-panel.visible { display: block; }
-
-  .polly-panel .row {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-  }
-
-  .polly-panel .row > div {
-    flex: 1;
-    min-width: 140px;
-  }
-
-  .polly-panel label.field-label {
-    display: block;
-    font-size: 11px;
-    color: var(--dim);
-    margin-bottom: 4px;
-  }
-
-  .polly-panel input[type="text"],
-  .polly-panel input[type="password"],
-  .polly-panel select {
-    width: 100%;
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 13px;
-    padding: 8px 10px;
-    border-radius: 4px;
-    border: 1px solid var(--line);
-    background: #fff;
-    color: var(--ink);
-  }
-
-  .polly-note {
-    font-size: 11px;
-    color: var(--dim);
-    line-height: 1.6;
-    margin-top: 4px;
-  }
 
   .controls {
     display: flex;
@@ -209,7 +221,7 @@
   }
 
   .stage.empty::before {
-    content: "Paste or type English text above, then press Read.";
+    content: "영어 문장을 입력하고 Read aloud를 눌러보세요.";
     color: var(--dim);
     font-family: 'Source Serif 4', serif;
     font-style: italic;
@@ -258,84 +270,74 @@
 <body>
 <div class="room">
   <header>
-    <h1>English Reading Room</h1>
-    <span id="status">idle</span>
+    <div class="left">
+      <h1>English Reading Room</h1>
+      <span class="status" id="status">idle</span>
+    </div>
+    <button class="gear-btn" id="gearBtn" title="Polly 설정">⚙</button>
   </header>
 
-  <textarea id="input" placeholder="Through examples of democracy in local communities, we'll learn about the importance of local self-governance and resident participation.">Through examples of democracy in local communities, we'll learn about the importance of local self-governance and resident participation.</textarea>
-
-  <div class="engine-toggle">
-    <label id="engineBrowserLabel" class="active">
-      <input type="radio" name="engine" value="browser" checked>
-      <span>브라우저 음성 (무료)</span>
-    </label>
-    <label id="enginePollyLabel">
-      <input type="radio" name="engine" value="polly">
-      <span>Amazon Polly (실제 음성)</span>
-    </label>
-  </div>
-
-  <div class="polly-panel" id="pollyPanel">
-    <div class="row">
-      <div>
-        <label class="field-label">AWS Access Key ID</label>
-        <input type="text" id="pollyAccessKey" autocomplete="off" placeholder="AKIA...">
-      </div>
-      <div>
-        <label class="field-label">AWS Secret Access Key</label>
-        <input type="password" id="pollySecretKey" autocomplete="off" placeholder="••••••••">
-      </div>
+  <div class="settings-panel" id="settingsPanel">
+    <h2>Amazon Polly 설정</h2>
+    <div class="field">
+      <label>AWS Access Key ID</label>
+      <input type="text" id="pollyAccessKey" autocomplete="off" placeholder="AKIA...">
     </div>
-    <div class="row">
-      <div>
-        <label class="field-label">리전</label>
-        <select id="pollyRegion">
-          <option value="us-east-1">us-east-1 (N. Virginia)</option>
-          <option value="us-west-2">us-west-2 (Oregon)</option>
-          <option value="ap-northeast-2">ap-northeast-2 (Seoul)</option>
-          <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
-          <option value="eu-west-1">eu-west-1 (Ireland)</option>
-        </select>
-      </div>
-      <div>
-        <label class="field-label">엔진</label>
-        <select id="pollyEngine">
-          <option value="neural" selected>neural (자연스러움, 지역 제한 있음)</option>
-          <option value="standard">standard (모든 리전 가능)</option>
-        </select>
-      </div>
-      <div>
-        <label class="field-label">목소리</label>
-        <select id="pollyVoice">
-          <option value="Joanna">Joanna (미국 여)</option>
-          <option value="Matthew">Matthew (미국 남)</option>
-          <option value="Ivy">Ivy (미국 여, 아동톤)</option>
-          <option value="Kendra">Kendra (미국 여)</option>
-          <option value="Justin">Justin (미국 남, 아동톤)</option>
-          <option value="Amy">Amy (영국 여)</option>
-          <option value="Brian">Brian (영국 남)</option>
-          <option value="Emma">Emma (영국 여)</option>
-        </select>
-      </div>
+    <div class="field">
+      <label>AWS Secret Access Key</label>
+      <input type="password" id="pollySecretKey" autocomplete="off" placeholder="••••••••">
     </div>
-    <div class="polly-note">
-      키는 저장되지 않고 이 창을 새로고침하면 사라져요. IAM에서 <b>polly:SynthesizeSpeech</b> 권한만 있는 전용 사용자 키를 쓰는 걸 권장해요(루트 키 X).
+    <div class="field">
+      <label>리전</label>
+      <select id="pollyRegion">
+        <option value="us-east-1">us-east-1 (N. Virginia)</option>
+        <option value="us-west-2">us-west-2 (Oregon)</option>
+        <option value="ap-northeast-2">ap-northeast-2 (Seoul)</option>
+        <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+        <option value="eu-west-1">eu-west-1 (Ireland)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>엔진</label>
+      <select id="pollyEngine">
+        <option value="neural" selected>neural (자연스러움, 리전 제한 있음)</option>
+        <option value="standard">standard (모든 리전 가능)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>목소리</label>
+      <select id="pollyVoice">
+        <option value="Joanna">Joanna (미국 여)</option>
+        <option value="Matthew">Matthew (미국 남)</option>
+        <option value="Ivy">Ivy (미국 여, 아동톤)</option>
+        <option value="Kendra">Kendra (미국 여)</option>
+        <option value="Justin">Justin (미국 남, 아동톤)</option>
+        <option value="Amy">Amy (영국 여)</option>
+        <option value="Brian">Brian (영국 남)</option>
+        <option value="Emma">Emma (영국 여)</option>
+      </select>
+    </div>
+    <div class="settings-note">
+      키는 저장되지 않고 새로고침하면 사라져요. IAM에서 <b>polly:SynthesizeSpeech</b> 권한만 있는 전용 키를 쓰세요.
       neural 엔진은 리전마다 지원 여부가 달라서 오류가 나면 standard로 바꿔보세요.
     </div>
+    <button class="settings-close" id="settingsCloseBtn">닫기</button>
   </div>
+
+  <textarea id="input" placeholder="Through examples of democracy in local communities, we'll learn about the importance of local self-governance and resident participation.">Through examples of democracy in local communities, we'll learn about the importance of local self-governance and resident participation.</textarea>
 
   <div class="controls">
     <button id="playBtn">Read aloud</button>
     <button id="stopBtn" class="secondary" disabled>Stop</button>
     <button id="downloadBtn" class="secondary" disabled>mp3 다운로드</button>
-    <select id="voiceSelect"></select>
     <label class="rate-label">
       Speed
       <select id="rateSelect">
-        <option value="0.75">0.75x</option>
-        <option value="0.9">0.9x</option>
+        <option value="0.7">0.7x</option>
+        <option value="0.85">0.85x</option>
         <option value="1" selected>1x</option>
         <option value="1.15">1.15x</option>
+        <option value="1.3">1.3x</option>
       </select>
     </label>
   </div>
@@ -348,8 +350,8 @@
   <audio id="audioPlayer" style="display:none;"></audio>
 
   <footer>
-    브라우저 음성은 Web Speech API, Polly 음성은 이 브라우저에서 직접 Amazon Polly API를 SigV4로 서명해 호출해서
-    실제 mp3 오디오와 단어별 타이밍(Speech Marks)을 받아온 뒤, 그 타이밍에 맞춰 단어를 하이라이트해요.
+    이 브라우저에서 직접 Amazon Polly API를 SigV4로 서명해 호출해서 실제 mp3 오디오와 단어별 타이밍(Speech Marks)을
+    받아와요. 속도는 SSML의 &lt;prosody rate&gt;로 Polly에 직접 전달돼서 실제로 빨라지거나 느려져요.
     생성된 mp3는 다운로드 버튼으로 저장할 수 있어요.
   </footer>
 </div>
@@ -361,64 +363,38 @@ const phraseEl = document.getElementById('phrase');
 const playBtn = document.getElementById('playBtn');
 const stopBtn = document.getElementById('stopBtn');
 const downloadBtn = document.getElementById('downloadBtn');
-const voiceSelect = document.getElementById('voiceSelect');
 const rateSelect = document.getElementById('rateSelect');
 const statusEl = document.getElementById('status');
 const pollyStatus = document.getElementById('pollyStatus');
-const pollyPanel = document.getElementById('pollyPanel');
 const audioPlayer = document.getElementById('audioPlayer');
-const engineBrowserLabel = document.getElementById('engineBrowserLabel');
-const enginePollyLabel = document.getElementById('enginePollyLabel');
+const gearBtn = document.getElementById('gearBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+const settingsCloseBtn = document.getElementById('settingsCloseBtn');
 
-let voices = [];
-let utterance = null;
 let wordSpans = [];
-let currentEngine = 'browser';
 let pollyMarks = [];
 let pollyAudioUrl = null;
 let rafId = null;
 
-/* ---------- engine toggle ---------- */
-document.querySelectorAll('input[name="engine"]').forEach(radio => {
-  radio.addEventListener('change', () => {
-    currentEngine = radio.value;
-    pollyPanel.classList.toggle('visible', currentEngine === 'polly');
-    voiceSelect.style.display = currentEngine === 'polly' ? 'none' : '';
-    engineBrowserLabel.classList.toggle('active', currentEngine === 'browser');
-    enginePollyLabel.classList.toggle('active', currentEngine === 'polly');
-    setPollyStatus('', '');
-  });
+/* ---------- settings panel toggle ---------- */
+gearBtn.addEventListener('click', () => {
+  settingsPanel.classList.toggle('open');
+});
+settingsCloseBtn.addEventListener('click', () => {
+  settingsPanel.classList.remove('open');
+});
+document.addEventListener('click', (e) => {
+  if (!settingsPanel.contains(e.target) && e.target !== gearBtn && settingsPanel.classList.contains('open')) {
+    settingsPanel.classList.remove('open');
+  }
 });
 
-/* ---------- browser TTS voices ---------- */
-function populateVoices() {
-  voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
-  voiceSelect.innerHTML = '';
-  if (voices.length === 0) {
-    const opt = document.createElement('option');
-    opt.textContent = 'Loading voices…';
-    voiceSelect.appendChild(opt);
-    return;
-  }
-  voices.forEach((v, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = `${v.name} (${v.lang})`;
-    voiceSelect.appendChild(opt);
-  });
-  const preferred = voices.findIndex(v => /Natural|Neural|Google US English|Samantha/i.test(v.name));
-  if (preferred >= 0) voiceSelect.value = preferred;
-}
-speechSynthesis.onvoiceschanged = populateVoices;
-populateVoices();
-
-/* ---------- shared word-stage rendering ---------- */
+/* ---------- word-stage rendering (index-based highlight) ---------- */
 function buildPhrase(text) {
   stage.classList.remove('empty');
   phraseEl.innerHTML = '';
   wordSpans = [];
   const tokens = text.split(/(\s+)/);
-  let charOffset = 0;
   tokens.forEach(tok => {
     if (tok.trim() === '') {
       phraseEl.appendChild(document.createTextNode(tok));
@@ -426,12 +402,9 @@ function buildPhrase(text) {
       const span = document.createElement('span');
       span.className = 'word';
       span.textContent = tok;
-      span.dataset.start = charOffset;
-      span.dataset.end = charOffset + tok.length;
       phraseEl.appendChild(span);
       wordSpans.push(span);
     }
-    charOffset += tok.length;
   });
 }
 
@@ -439,14 +412,12 @@ function clearHighlight() {
   wordSpans.forEach(s => s.classList.remove('active', 'done'));
 }
 
-function highlightAt(charIndex) {
-  wordSpans.forEach(s => {
-    const start = Number(s.dataset.start);
-    const end = Number(s.dataset.end);
-    if (charIndex >= start && charIndex < end) {
+function highlightIndex(idx) {
+  wordSpans.forEach((s, i) => {
+    if (i === idx) {
       s.classList.add('active');
       s.classList.remove('done');
-    } else if (charIndex >= end) {
+    } else if (i < idx) {
       s.classList.add('done');
       s.classList.remove('active');
     } else {
@@ -464,31 +435,6 @@ function setReading(isReading) {
 function setPollyStatus(msg, kind) {
   pollyStatus.textContent = msg;
   pollyStatus.className = 'status-line' + (kind ? ' ' + kind : '');
-}
-
-/* ---------- browser TTS playback ---------- */
-function playBrowser(text) {
-  speechSynthesis.cancel();
-  buildPhrase(text);
-
-  utterance = new SpeechSynthesisUtterance(text);
-  const idx = Number(voiceSelect.value);
-  if (voices[idx]) utterance.voice = voices[idx];
-  utterance.rate = Number(rateSelect.value);
-
-  utterance.onboundary = (e) => {
-    if (e.name === 'word' || e.charIndex !== undefined) {
-      highlightAt(e.charIndex);
-    }
-  };
-  utterance.onstart = () => setReading(true);
-  utterance.onend = () => {
-    setReading(false);
-    wordSpans.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
-  };
-  utterance.onerror = () => setReading(false);
-
-  speechSynthesis.speak(utterance);
 }
 
 /* ---------- AWS SigV4 helpers (Web Crypto) ---------- */
@@ -546,6 +492,13 @@ async function pollySignedFetch({ accessKey, secretKey, region, bodyObj }) {
   return res;
 }
 
+function escapeSsml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 /* ---------- Polly playback ---------- */
 async function playPolly(text) {
   const accessKey = document.getElementById('pollyAccessKey').value.trim();
@@ -553,9 +506,12 @@ async function playPolly(text) {
   const region = document.getElementById('pollyRegion').value;
   const engine = document.getElementById('pollyEngine').value;
   const voiceId = document.getElementById('pollyVoice').value;
+  const rate = Number(rateSelect.value);
+  const ratePercent = Math.round(rate * 100);
 
   if (!accessKey || !secretKey) {
-    setPollyStatus('Access Key와 Secret Key를 입력해주세요.', 'err');
+    setPollyStatus('설정(⚙)에서 Access Key와 Secret Key를 입력해주세요.', 'err');
+    settingsPanel.classList.add('open');
     return;
   }
 
@@ -564,9 +520,10 @@ async function playPolly(text) {
   playBtn.disabled = true;
   downloadBtn.disabled = true;
 
-  try {
-    const baseBody = { Text: text, VoiceId: voiceId, Engine: engine, TextType: 'text' };
+  const ssml = `<speak><prosody rate="${ratePercent}%">${escapeSsml(text)}</prosody></speak>`;
+  const baseBody = { Text: ssml, VoiceId: voiceId, Engine: engine, TextType: 'ssml' };
 
+  try {
     const marksRes = await pollySignedFetch({
       accessKey, secretKey, region,
       bodyObj: { ...baseBody, OutputFormat: 'json', SpeechMarkTypes: ['word'] }
@@ -593,11 +550,11 @@ async function playPolly(text) {
 
     const step = () => {
       const ms = audioPlayer.currentTime * 1000;
-      let current = null;
-      for (const m of pollyMarks) {
-        if (m.time <= ms) current = m; else break;
+      let idx = -1;
+      for (let i = 0; i < pollyMarks.length; i++) {
+        if (pollyMarks[i].time <= ms) idx = i; else break;
       }
-      if (current) highlightAt(current.start);
+      if (idx >= 0) highlightIndex(idx);
       if (!audioPlayer.paused && !audioPlayer.ended) {
         rafId = requestAnimationFrame(step);
       }
@@ -621,21 +578,13 @@ async function playPolly(text) {
 playBtn.addEventListener('click', () => {
   const text = input.value.trim();
   if (!text) return;
-  if (currentEngine === 'browser') {
-    playBrowser(text);
-  } else {
-    playPolly(text);
-  }
+  playPolly(text);
 });
 
 stopBtn.addEventListener('click', () => {
-  if (currentEngine === 'browser') {
-    speechSynthesis.cancel();
-  } else {
-    audioPlayer.pause();
-    audioPlayer.currentTime = 0;
-    if (rafId) cancelAnimationFrame(rafId);
-  }
+  audioPlayer.pause();
+  audioPlayer.currentTime = 0;
+  if (rafId) cancelAnimationFrame(rafId);
   setReading(false);
   clearHighlight();
 });
