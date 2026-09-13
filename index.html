@@ -302,7 +302,7 @@
 
   .word.en { color: var(--ink); font-weight: 600; }
   .word.ko { color: var(--dim); font-weight: 400; }
-  .word.active { color: #1a3fe0; }
+  .word.active { color: #e02424; }
 
   .word {
     transition: color 0.15s ease;
@@ -471,6 +471,8 @@ const pollyEngine = document.getElementById('pollyEngine');
 const pollyVoice = document.getElementById('pollyVoice');
 const playOverlayBtn = document.getElementById('playOverlayBtn');
 const playCountEl = document.getElementById('playCountEl');
+const pollyAccessKey = document.getElementById('pollyAccessKey');
+const pollySecretKey = document.getElementById('pollySecretKey');
 
 let wordSpans = [];
 let spokenSpans = [];
@@ -497,7 +499,9 @@ function saveState() {
       engine: pollyEngine.value,
       voice: pollyVoice.value,
       rate: rateSelect.value,
-      playCount: playCount
+      playCount: playCount,
+      accessKey: pollyAccessKey.value,
+      secretKey: pollySecretKey.value
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) { /* storage full or unavailable — ignore */ }
@@ -515,10 +519,22 @@ function loadState() {
     if (state.voice) pollyVoice.value = state.voice;
     if (state.rate) rateSelect.value = state.rate;
     if (typeof state.playCount === 'number') playCount = state.playCount;
+    if (state.accessKey) pollyAccessKey.value = state.accessKey;
+    if (state.secretKey) pollySecretKey.value = state.secretKey;
   } catch (e) { /* ignore corrupt data */ }
 }
 loadState();
 updatePlayCountDisplay();
+
+/* 요청에 따라 키를 이 브라우저에 저장합니다. 이 기기를 다른 사람과 같이 쓰거나
+   분실 위험이 있다면, AWS IAM 콘솔에서 해당 액세스 키를 비활성화/재발급하면 됩니다. */
+[pollyAccessKey, pollySecretKey].forEach(el => el.addEventListener('input', saveState));
+
+/* 저장된 글이 있으면 편집 화면 대신 바로 낭독 화면으로 진입 */
+if (input.value.trim()) {
+  buildPhrase(input.value.trim());
+  openOverlay();
+}
 
 input.addEventListener('input', saveState);
 [pollyRegion, pollyEngine, pollyVoice, rateSelect].forEach(el => el.addEventListener('change', saveState));
@@ -832,7 +848,11 @@ function startPlayback() {
 }
 
 playBtn.addEventListener('click', playPolly);
-playOverlayBtn.addEventListener('click', startPlayback);
+playOverlayBtn.addEventListener('click', async () => {
+  if (audioReady) { startPlayback(); return; }
+  await playPolly();
+  if (audioReady) startPlayback();
+});
 
 function stopReading() {
   audioPlayer.pause();
