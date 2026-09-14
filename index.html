@@ -1078,17 +1078,19 @@ function getVideoAudioStream() {
   return videoDestNode.stream;
 }
 
-function wrapCanvasText(ctx, tokens, x, startY, maxWidth, lineHeight, activeGroup) {
+function wrapCanvasText(ctx, tokens, x, startY, maxWidth, lineHeight, activeGroup, measureOnly) {
   let cx = x, cy = startY;
-  const spaceWidth = ctx.measureText(' ').width;
   tokens.forEach(tok => {
+    ctx.font = tok.cls === 'en' ? '600 34px "Source Serif 4", serif' : '400 34px "Source Serif 4", serif';
     const w = ctx.measureText(tok.text).width;
+    const spaceWidth = ctx.measureText(' ').width;
     if (cx + w > x + maxWidth) { cx = x; cy += lineHeight; }
-    ctx.fillStyle = tok.cls === 'en'
-      ? (tok.group === activeGroup ? '#e02424' : '#2b2620')
-      : '#9a9184';
-    ctx.font = tok.cls === 'en' ? '600 30px "Source Serif 4", serif' : '400 30px "Source Serif 4", serif';
-    ctx.fillText(tok.text, cx, cy);
+    if (!measureOnly) {
+      ctx.fillStyle = tok.cls === 'en'
+        ? (tok.group === activeGroup ? '#e02424' : '#2b2620')
+        : '#9a9184';
+      ctx.fillText(tok.text, cx, cy);
+    }
     cx += w + spaceWidth;
   });
   return cy + lineHeight;
@@ -1112,6 +1114,15 @@ function currentActiveGroup() {
   return group;
 }
 
+function computeParagraphSentence() {
+  let lastSeen = -1;
+  return renderParagraphs.map(paragraph => {
+    const sentences = paragraph.filter(t => t.cls === 'en' && t.group >= 0).map(t => groupSentence[t.group]);
+    if (sentences.length) lastSeen = Math.max(...sentences);
+    return lastSeen;
+  });
+}
+
 async function generateVideo() {
   if (!audioReady || !pollyAudioUrl) return;
   if (typeof MediaRecorder === 'undefined' || !videoCanvas.captureStream) {
@@ -1130,8 +1141,8 @@ async function generateVideo() {
   await (audioCtxForVideo.resume && audioCtxForVideo.resume());
   if (document.fonts && document.fonts.load) {
     try {
-      await document.fonts.load('600 30px "Source Serif 4"');
-      await document.fonts.load('400 30px "Source Serif 4"');
+      await document.fonts.load('600 34px "Source Serif 4"');
+      await document.fonts.load('400 34px "Source Serif 4"');
     } catch (e) { /* fall back to default serif if the webfont fails to load */ }
   }
 
@@ -1141,26 +1152,42 @@ async function generateVideo() {
   if (attachedImageData) {
     try { img = await loadImageEl(attachedImageData); } catch (e) { img = null; }
   }
+  const paragraphSentence = computeParagraphSentence();
 
   function drawFrame() {
     ctx.fillStyle = '#faf7f1';
     ctx.fillRect(0, 0, W, H);
-    let textTop = 60;
+    let imgBottom = 40;
     if (img) {
-      const maxImgH = H * 0.32;
+      const maxImgH = H * 0.28;
       const scale = Math.min((W - 80) / img.width, maxImgH / img.height);
       const iw = img.width * scale, ih = img.height * scale;
       const ix = (W - iw) / 2;
       ctx.drawImage(img, ix, 40, iw, ih);
-      textTop = 40 + ih + 60;
+      imgBottom = 40 + ih;
     }
     ctx.textBaseline = 'alphabetic';
+
     const activeGroup = currentActiveGroup();
-    let y = textTop + 30;
-    renderParagraphs.forEach(paragraph => {
-      if (paragraph.length === 0) { y += 44; return; }
-      y = wrapCanvasText(ctx, paragraph, 50, y, W - 100, 46, activeGroup);
-      y += 10;
+    const activeSentence = activeGroup >= 0 ? groupSentence[activeGroup] : 0;
+    const cardParagraphs = renderParagraphs.filter((p, i) => paragraphSentence[i] === activeSentence);
+
+    // measure total height first so the card can be vertically centered
+    // in the space below the image (or the whole canvas if there's no image).
+    const lineHeight = 50;
+    const areaTop = img ? imgBottom + 50 : 0;
+    const areaHeight = H - areaTop;
+    let measuredY = 0;
+    cardParagraphs.forEach(paragraph => {
+      if (paragraph.length === 0) { measuredY += lineHeight; return; }
+      measuredY = wrapCanvasText(ctx, paragraph, 50, measuredY, W - 100, lineHeight, activeGroup, true);
+      measuredY += 14;
+    });
+    let y = areaTop + Math.max(40, (areaHeight - measuredY) / 2) + lineHeight * 0.7;
+    cardParagraphs.forEach(paragraph => {
+      if (paragraph.length === 0) { y += lineHeight; return; }
+      y = wrapCanvasText(ctx, paragraph, 50, y, W - 100, lineHeight, activeGroup, false);
+      y += 14;
     });
   }
 
