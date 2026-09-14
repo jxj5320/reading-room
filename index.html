@@ -442,6 +442,7 @@
     <button id="playBtn">Read aloud</button>
     <button id="stopBtnMain" class="secondary" disabled>Stop</button>
     <button id="downloadBtnMain" class="secondary" disabled>mp3 다운로드</button>
+    <button id="videoBtnMain" class="secondary" disabled>동영상 다운로드</button>
     <button id="resetBtn" class="secondary" type="button">초기화</button>
     <label class="rate-label">
       Speed
@@ -478,10 +479,12 @@
       <button id="playOverlayBtn">Play</button>
       <button id="stopBtn" class="secondary" disabled>Stop</button>
       <button id="downloadBtn" class="secondary" disabled>mp3 다운로드</button>
+      <button id="videoBtn" class="secondary" disabled>동영상 다운로드</button>
     </div>
   </div>
 </div>
 <audio id="audioPlayer" style="display:none;"></audio>
+<canvas id="videoCanvas" width="720" height="1280" style="display:none;"></canvas>
 
 <script>
 const STORAGE_KEY = 'erroom_v1';
@@ -492,6 +495,9 @@ const stopBtn = document.getElementById('stopBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const stopBtnMain = document.getElementById('stopBtnMain');
 const downloadBtnMain = document.getElementById('downloadBtnMain');
+const videoBtn = document.getElementById('videoBtn');
+const videoBtnMain = document.getElementById('videoBtnMain');
+const videoCanvas = document.getElementById('videoCanvas');
 const resetBtn = document.getElementById('resetBtn');
 const rateSelect = document.getElementById('rateSelect');
 const statusEl = document.getElementById('status');
@@ -522,6 +528,7 @@ let spokenSpans = [];
 let spokenIndexToGroup = [];
 let groups = [];
 let groupSentence = [];
+let renderParagraphs = [[]];
 let attachedImageData = null;
 let pollyMarks = [];
 let pollyAudioUrl = null;
@@ -680,6 +687,7 @@ function buildPhrase(text) {
   groups = [];
   groupSentence = [];
   spokenIndexToGroup = [];
+  renderParagraphs = [[]];
   let currentGroup = null;
   let breakPending = true;
   let sentenceIndex = -1;
@@ -689,6 +697,8 @@ function buildPhrase(text) {
   tokens.forEach(tok => {
     if (tok.trim() === '') {
       overlayPhrase.appendChild(document.createTextNode(tok));
+      const breaks = (tok.match(/\n/g) || []).length;
+      for (let i = 0; i < breaks; i++) renderParagraphs.push([]);
       return;
     }
     const span = document.createElement('span');
@@ -709,10 +719,12 @@ function buildPhrase(text) {
       currentGroup.push(span);
       spokenSpans.push(span);
       spokenIndexToGroup.push(groups.length - 1);
+      renderParagraphs[renderParagraphs.length - 1].push({ text: tok, cls: 'en', group: groups.length - 1 });
     } else {
       span.classList.add('ko');
       breakPending = true;
       if (/^\d+[.)]$/.test(tok.trim())) pendingNewSentence = true;
+      renderParagraphs[renderParagraphs.length - 1].push({ text: tok, cls: 'ko', group: -1 });
     }
   });
 }
@@ -741,6 +753,8 @@ function setReading(isReading) {
 function setDownloadEnabled(enabled) {
   downloadBtn.disabled = !enabled;
   downloadBtnMain.disabled = !enabled;
+  videoBtn.disabled = !enabled;
+  videoBtnMain.disabled = !enabled;
 }
 
 function setStatus(msg, kind) {
@@ -1046,6 +1060,170 @@ function downloadMp3() {
 }
 downloadBtn.addEventListener('click', downloadMp3);
 downloadBtnMain.addEventListener('click', downloadMp3);
+
+/* ---------- video export (canvas + audio recorded in real time) ---------- */
+let audioCtxForVideo = null;
+let mediaElSource = null;
+let videoDestNode = null;
+
+function getVideoAudioStream() {
+  if (!audioCtxForVideo) {
+    audioCtxForVideo = new (window.AudioContext || window.webkitAudioContext)();
+    mediaElSource = audioCtxForVideo.createMediaElementSource(audioPlayer);
+    videoDestNode = audioCtxForVideo.createMediaStreamDestination();
+    mediaElSource.connect(videoDestNode);
+    mediaElSource.connect(audioCtxForVideo.destination);
+  }
+  if (audioCtxForVideo.state === 'suspended') audioCtxForVideo.resume();
+  return videoDestNode.stream;
+}
+
+function wrapCanvasText(ctx, tokens, x, startY, maxWidth, lineHeight, activeGroup) {
+  let cx = x, cy = startY;
+  const spaceWidth = ctx.measureText(' ').width;
+  tokens.forEach(tok => {
+    const w = ctx.measureText(tok.text).width;
+    if (cx + w > x + maxWidth) { cx = x; cy += lineHeight; }
+    ctx.fillStyle = tok.cls === 'en'
+      ? (tok.group === activeGroup ? '#e02424' : '#2b2620')
+      : '#9a9184';
+    ctx.font = tok.cls === 'en' ? '600 30px "Source Serif 4", serif' : '400 30px "Source Serif 4", serif';
+    ctx.fillText(tok.text, cx, cy);
+    cx += w + spaceWidth;
+  });
+  return cy + lineHeight;
+}
+
+async function loadImageEl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+function currentActiveGroup() {
+  const ms = audioPlayer.currentTime * 1000;
+  let group = -1;
+  for (let i = 0; i < pollyMarks.length; i++) {
+    if (pollyMarks[i].time <= ms) group = pollyMarks[i].group; else break;
+  }
+  return group;
+}
+
+async function generateVideo() {
+  if (!audioReady || !pollyAudioUrl) return;
+  if (typeof MediaRecorder === 'undefined' || !videoCanvas.captureStream) {
+    setStatus('이 브라우저는 동영상 녹화를 지원하지 않아요.', 'err');
+    return;
+  }
+
+  videoBtn.disabled = true;
+  videoBtnMain.disabled = true;
+  playBtn.disabled = true;
+  playOverlayBtn.disabled = true;
+  stopBtn.disabled = true;
+  stopBtnMain.disabled = true;
+
+  const audioStream = getVideoAudioStream();
+  await (audioCtxForVideo.resume && audioCtxForVideo.resume());
+  if (document.fonts && document.fonts.load) {
+    try {
+      await document.fonts.load('600 30px "Source Serif 4"');
+      await document.fonts.load('400 30px "Source Serif 4"');
+    } catch (e) { /* fall back to default serif if the webfont fails to load */ }
+  }
+
+  const ctx = videoCanvas.getContext('2d');
+  const W = videoCanvas.width, H = videoCanvas.height;
+  let img = null;
+  if (attachedImageData) {
+    try { img = await loadImageEl(attachedImageData); } catch (e) { img = null; }
+  }
+
+  function drawFrame() {
+    ctx.fillStyle = '#faf7f1';
+    ctx.fillRect(0, 0, W, H);
+    let textTop = 60;
+    if (img) {
+      const maxImgH = H * 0.32;
+      const scale = Math.min((W - 80) / img.width, maxImgH / img.height);
+      const iw = img.width * scale, ih = img.height * scale;
+      const ix = (W - iw) / 2;
+      ctx.drawImage(img, ix, 40, iw, ih);
+      textTop = 40 + ih + 60;
+    }
+    ctx.textBaseline = 'alphabetic';
+    const activeGroup = currentActiveGroup();
+    let y = textTop + 30;
+    renderParagraphs.forEach(paragraph => {
+      if (paragraph.length === 0) { y += 44; return; }
+      y = wrapCanvasText(ctx, paragraph, 50, y, W - 100, 46, activeGroup);
+      y += 10;
+    });
+  }
+
+  const canvasStream = videoCanvas.captureStream(30);
+  const combined = new MediaStream([
+    ...canvasStream.getVideoTracks(),
+    ...audioStream.getAudioTracks()
+  ]);
+
+  const candidates = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
+  const mimeType = candidates.find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+  const recorder = new MediaRecorder(combined, mimeType ? { mimeType } : undefined);
+  const chunks = [];
+  recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+  const finished = new Promise(resolve => { recorder.onstop = resolve; });
+
+  setStatus('동영상 만드는 중… (재생 시간만큼 걸려요)', '');
+  audioPlayer.currentTime = 0;
+  recorder.start();
+
+  let rafVideoId = null;
+  const draw = () => {
+    drawFrame();
+    if (!audioPlayer.paused && !audioPlayer.ended) rafVideoId = requestAnimationFrame(draw);
+  };
+
+  const prevOnEnded = audioPlayer.onended;
+  await audioPlayer.play();
+  draw();
+
+  await new Promise(resolve => { audioPlayer.onended = resolve; });
+  audioPlayer.onended = prevOnEnded;
+  if (rafVideoId) cancelAnimationFrame(rafVideoId);
+  recorder.stop();
+  await finished;
+
+  const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
+  const ext = (mimeType || '').includes('mp4') ? 'mp4' : 'webm';
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const firstWords = spokenSpans.slice(0, 4).map(s => s.textContent).join('_').replace(/[^\w-]/g, '');
+  a.download = `${firstWords || 'reading'}.${ext}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  setStatus('동영상 다운로드 완료.', 'ok');
+  playCount += 1;
+  updatePlayCountDisplay();
+  saveState();
+
+  videoBtn.disabled = false;
+  videoBtnMain.disabled = false;
+  playBtn.disabled = false;
+  setReading(false);
+  clearHighlight();
+}
+
+videoBtn.addEventListener('click', generateVideo);
+videoBtnMain.addEventListener('click', generateVideo);
 
 resetBtn.addEventListener('click', () => {
   stopReading();
