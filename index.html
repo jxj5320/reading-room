@@ -521,11 +521,12 @@ let wordSpans = [];
 let spokenSpans = [];
 let spokenIndexToGroup = [];
 let groups = [];
+let groupSentence = [];
 let attachedImageData = null;
 let pollyMarks = [];
 let pollyAudioUrl = null;
 let rafId = null;
-let loopGroupIndex = null;
+let loopSentenceIndex = null;
 let loopHandler = null;
 let playCount = 0;
 let audioReady = false;
@@ -677,9 +678,12 @@ function buildPhrase(text) {
   wordSpans = [];
   spokenSpans = [];
   groups = [];
+  groupSentence = [];
   spokenIndexToGroup = [];
   let currentGroup = null;
   let breakPending = true;
+  let sentenceIndex = -1;
+  let pendingNewSentence = true;
 
   const tokens = text.split(/(\s+)/);
   tokens.forEach(tok => {
@@ -699,6 +703,8 @@ function buildPhrase(text) {
         currentGroup = [];
         groups.push(currentGroup);
         breakPending = false;
+        if (pendingNewSentence) { sentenceIndex++; pendingNewSentence = false; }
+        groupSentence.push(sentenceIndex);
       }
       currentGroup.push(span);
       spokenSpans.push(span);
@@ -706,6 +712,7 @@ function buildPhrase(text) {
     } else {
       span.classList.add('ko');
       breakPending = true;
+      if (/^\d+[.)]$/.test(tok.trim())) pendingNewSentence = true;
     }
   });
 }
@@ -946,16 +953,21 @@ playOverlayBtn.addEventListener('click', async () => {
 
 function stopGroupLoop() {
   if (loopHandler) { audioPlayer.removeEventListener('timeupdate', loopHandler); loopHandler = null; }
-  if (loopGroupIndex !== null) {
-    const btn = document.querySelector(`.repeat-btn[data-group="${loopGroupIndex}"]`);
+  if (loopSentenceIndex !== null) {
+    const btn = document.querySelector(`.repeat-btn[data-sentence="${loopSentenceIndex}"]`);
     if (btn) btn.classList.remove('looping');
   }
-  loopGroupIndex = null;
+  loopSentenceIndex = null;
 }
 
-function startGroupLoop(gi) {
+function startSentenceLoop(si) {
   if (!pollyMarks.length) return;
-  const wasLooping = loopGroupIndex === gi;
+  const groupIndices = groupSentence.reduce((arr, s, gi) => { if (s === si) arr.push(gi); return arr; }, []);
+  if (!groupIndices.length) return;
+  const firstGi = groupIndices[0];
+  const lastGi = groupIndices[groupIndices.length - 1];
+
+  const wasLooping = loopSentenceIndex === si;
   stopGroupLoop();
   if (rafId) cancelAnimationFrame(rafId);
   if (wasLooping) {
@@ -964,15 +976,26 @@ function startGroupLoop(gi) {
     clearHighlight();
     return;
   }
-  const startMs = pollyMarks[gi].time;
-  const endMs = pollyMarks[gi + 1] ? pollyMarks[gi + 1].time : (audioPlayer.duration * 1000 || startMs + 3000);
-  loopGroupIndex = gi;
-  const btn = document.querySelector(`.repeat-btn[data-group="${gi}"]`);
+  const startMs = pollyMarks[firstGi].time;
+  const endMs = pollyMarks[lastGi + 1] ? pollyMarks[lastGi + 1].time : (audioPlayer.duration * 1000 || startMs + 3000);
+  loopSentenceIndex = si;
+  const btn = document.querySelector(`.repeat-btn[data-sentence="${si}"]`);
   if (btn) btn.classList.add('looping');
-  highlightGroup(gi);
   setReading(true);
   audioPlayer.currentTime = startMs / 1000;
   audioPlayer.play();
+
+  const step = () => {
+    const ms = audioPlayer.currentTime * 1000;
+    let group = -1;
+    for (let i = 0; i < pollyMarks.length; i++) {
+      if (pollyMarks[i].time <= ms) group = pollyMarks[i].group; else break;
+    }
+    if (group >= 0) highlightGroup(group);
+    if (loopSentenceIndex === si) rafId = requestAnimationFrame(step);
+  };
+  rafId = requestAnimationFrame(step);
+
   loopHandler = () => {
     if (audioPlayer.currentTime * 1000 >= endMs - 20) {
       audioPlayer.currentTime = startMs / 1000;
@@ -983,16 +1006,21 @@ function startGroupLoop(gi) {
 
 function insertRepeatButtons() {
   document.querySelectorAll('.repeat-btn').forEach(b => b.remove());
-  groups.forEach((grp, gi) => {
+  const sentenceCount = groupSentence.length ? Math.max(...groupSentence) + 1 : 0;
+  for (let si = 0; si < sentenceCount; si++) {
+    let lastGi = -1;
+    groupSentence.forEach((s, gi) => { if (s === si) lastGi = gi; });
+    if (lastGi === -1) continue;
+    const grp = groups[lastGi];
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'repeat-btn';
-    btn.dataset.group = gi;
+    btn.dataset.sentence = si;
     btn.textContent = '🔁';
-    btn.title = '이 구간만 반복 재생';
-    btn.addEventListener('click', () => startGroupLoop(gi));
+    btn.title = '이 문장만 반복 재생';
+    btn.addEventListener('click', () => startSentenceLoop(si));
     grp[grp.length - 1].insertAdjacentElement('afterend', btn);
-  });
+  }
 }
 
 function stopReading() {
