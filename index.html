@@ -672,8 +672,7 @@ function clearHighlight() {
   wordSpans.forEach(s => s.classList.remove('active'));
 }
 
-function highlightSpokenIndex(idx) {
-  const activeGroup = spokenIndexToGroup[idx];
+function highlightGroup(activeGroup) {
   groups.forEach((grp, gi) => {
     grp.forEach(span => {
       if (gi === activeGroup) span.classList.add('active');
@@ -798,23 +797,31 @@ async function playPolly() {
   playOverlayBtn.disabled = true;
   setDownloadEnabled(false);
 
-  const speakText = spokenSpans.map(s => s.textContent).join(' ');
-  if (!speakText.trim()) {
+  const ssmlBody = groups.map((grp, gi) => {
+    const text = grp.map(s => escapeSsml(s.textContent)).join(' ');
+    return `<mark name="g${gi}"/>${text}`;
+  }).join(' ');
+
+  if (!ssmlBody.trim()) {
     setStatus('읽을 수 있는 영어 텍스트가 없어요.', 'err');
     playBtn.disabled = false;
     return;
   }
 
-  const ssml = `<speak><prosody rate="${ratePercent}%">${escapeSsml(speakText)}</prosody></speak>`;
+  const ssml = `<speak><prosody rate="${ratePercent}%">${ssmlBody}</prosody></speak>`;
   const baseBody = { Text: ssml, VoiceId: voiceId, Engine: engine, TextType: 'ssml' };
 
   try {
     const marksRes = await pollySignedFetch({
       accessKey, secretKey, region,
-      bodyObj: { ...baseBody, OutputFormat: 'json', SpeechMarkTypes: ['word'] }
+      bodyObj: { ...baseBody, OutputFormat: 'json', SpeechMarkTypes: ['ssml'] }
     });
     const marksText = await marksRes.text();
-    pollyMarks = marksText.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+    pollyMarks = marksText.trim().split('\n').filter(Boolean)
+      .map(line => JSON.parse(line))
+      .filter(m => m.type === 'ssml' && /^g\d+$/.test(m.value))
+      .map(m => ({ time: m.time, group: Number(m.value.slice(1)) }))
+      .sort((a, b) => a.time - b.time);
 
     const audioRes = await pollySignedFetch({
       accessKey, secretKey, region,
@@ -856,11 +863,11 @@ function startPlayback() {
 
   const step = () => {
     const ms = audioPlayer.currentTime * 1000;
-    let idx = -1;
+    let group = -1;
     for (let i = 0; i < pollyMarks.length; i++) {
-      if (pollyMarks[i].time <= ms) idx = i; else break;
+      if (pollyMarks[i].time <= ms) group = pollyMarks[i].group; else break;
     }
-    if (idx >= 0) highlightSpokenIndex(idx);
+    if (group >= 0) highlightGroup(group);
     if (!audioPlayer.paused && !audioPlayer.ended) rafId = requestAnimationFrame(step);
   };
   rafId = requestAnimationFrame(step);
