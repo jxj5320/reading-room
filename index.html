@@ -362,21 +362,40 @@
       <div class="field">
         <label>엔진</label>
         <select id="pollyEngine">
-          <option value="neural" selected>neural (자연스러움, 리전 제한 있음)</option>
+          <option value="generative" selected>generative (가장 자연스러움, Tiffany 등)</option>
+          <option value="neural">neural (자연스러움, 리전 제한 있음)</option>
           <option value="standard">standard (모든 리전 가능)</option>
         </select>
       </div>
       <div class="field">
         <label>목소리</label>
         <select id="pollyVoice">
-          <option value="Joanna">Joanna (미국 여)</option>
-          <option value="Matthew">Matthew (미국 남)</option>
-          <option value="Ivy">Ivy (미국 여, 아동톤)</option>
-          <option value="Kendra">Kendra (미국 여)</option>
-          <option value="Justin">Justin (미국 남, 아동톤)</option>
-          <option value="Amy">Amy (영국 여)</option>
-          <option value="Brian">Brian (영국 남)</option>
-          <option value="Emma">Emma (영국 여)</option>
+          <optgroup label="생성형(Generative)">
+            <option value="Tiffany" selected>Tiffany (여)</option>
+            <option value="Matthew">Matthew (남)</option>
+            <option value="Ruth">Ruth (여)</option>
+            <option value="Stephen">Stephen (남)</option>
+          </optgroup>
+          <optgroup label="미국 발음 - 여성">
+            <option value="Joanna">Joanna</option>
+            <option value="Kendra">Kendra</option>
+            <option value="Kimberly">Kimberly</option>
+            <option value="Salli">Salli</option>
+            <option value="Ivy">Ivy (아동톤)</option>
+          </optgroup>
+          <optgroup label="미국 발음 - 남성">
+            <option value="Joey">Joey</option>
+            <option value="Justin">Justin (아동톤)</option>
+          </optgroup>
+          <optgroup label="영국 발음">
+            <option value="Amy">Amy (여)</option>
+            <option value="Emma">Emma (여)</option>
+            <option value="Brian">Brian (남)</option>
+            <option value="Arthur">Arthur (남)</option>
+          </optgroup>
+          <optgroup label="호주 발음">
+            <option value="Olivia">Olivia (여)</option>
+          </optgroup>
         </select>
       </div>
       <div class="settings-note">
