@@ -304,6 +304,29 @@
   .word.ko { color: var(--dim); font-weight: 400; }
   .word.active { color: #e02424; }
 
+  .repeat-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-left: 4px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--dim);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    vertical-align: middle;
+  }
+  .repeat-btn.looping {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--ink);
+  }
+
   .word {
     transition: color 0.15s ease;
     border-radius: 3px;
@@ -502,6 +525,8 @@ let attachedImageData = null;
 let pollyMarks = [];
 let pollyAudioUrl = null;
 let rafId = null;
+let loopGroupIndex = null;
+let loopHandler = null;
 let playCount = 0;
 let audioReady = false;
 
@@ -780,6 +805,7 @@ function openOverlay() {
 }
 function closeOverlay() {
   overlay.classList.remove('open');
+  stopGroupLoop();
   audioPlayer.pause();
   if (rafId) cancelAnimationFrame(rafId);
   setReading(false);
@@ -872,6 +898,7 @@ async function playPolly() {
 
     setDownloadEnabled(true);
     audioReady = true;
+    insertRepeatButtons();
     playOverlayBtn.disabled = false;
     setStatus('준비 완료. Play를 눌러 재생하세요.', 'ok');
 
@@ -917,7 +944,59 @@ playOverlayBtn.addEventListener('click', async () => {
   if (audioReady) startPlayback();
 });
 
+function stopGroupLoop() {
+  if (loopHandler) { audioPlayer.removeEventListener('timeupdate', loopHandler); loopHandler = null; }
+  if (loopGroupIndex !== null) {
+    const btn = document.querySelector(`.repeat-btn[data-group="${loopGroupIndex}"]`);
+    if (btn) btn.classList.remove('looping');
+  }
+  loopGroupIndex = null;
+}
+
+function startGroupLoop(gi) {
+  if (!pollyMarks.length) return;
+  const wasLooping = loopGroupIndex === gi;
+  stopGroupLoop();
+  if (rafId) cancelAnimationFrame(rafId);
+  if (wasLooping) {
+    audioPlayer.pause();
+    setReading(false);
+    clearHighlight();
+    return;
+  }
+  const startMs = pollyMarks[gi].time;
+  const endMs = pollyMarks[gi + 1] ? pollyMarks[gi + 1].time : (audioPlayer.duration * 1000 || startMs + 3000);
+  loopGroupIndex = gi;
+  const btn = document.querySelector(`.repeat-btn[data-group="${gi}"]`);
+  if (btn) btn.classList.add('looping');
+  highlightGroup(gi);
+  setReading(true);
+  audioPlayer.currentTime = startMs / 1000;
+  audioPlayer.play();
+  loopHandler = () => {
+    if (audioPlayer.currentTime * 1000 >= endMs - 20) {
+      audioPlayer.currentTime = startMs / 1000;
+    }
+  };
+  audioPlayer.addEventListener('timeupdate', loopHandler);
+}
+
+function insertRepeatButtons() {
+  document.querySelectorAll('.repeat-btn').forEach(b => b.remove());
+  groups.forEach((grp, gi) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'repeat-btn';
+    btn.dataset.group = gi;
+    btn.textContent = '🔁';
+    btn.title = '이 구간만 반복 재생';
+    btn.addEventListener('click', () => startGroupLoop(gi));
+    grp[grp.length - 1].insertAdjacentElement('afterend', btn);
+  });
+}
+
 function stopReading() {
+  stopGroupLoop();
   audioPlayer.pause();
   audioPlayer.currentTime = 0;
   if (rafId) cancelAnimationFrame(rafId);
