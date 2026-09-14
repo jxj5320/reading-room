@@ -699,6 +699,7 @@ function buildPhrase(text) {
       overlayPhrase.appendChild(document.createTextNode(tok));
       const breaks = (tok.match(/\n/g) || []).length;
       for (let i = 0; i < breaks; i++) renderParagraphs.push([]);
+      if (breaks >= 2) pendingNewSentence = true;
       return;
     }
     const span = document.createElement('span');
