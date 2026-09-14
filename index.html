@@ -432,7 +432,7 @@
     </div>
     <div class="status-line" id="overlayStatus"></div>
     <div class="overlay-controls">
-      <button id="playOverlayBtn" disabled>Play</button>
+      <button id="playOverlayBtn">Play</button>
       <button id="stopBtn" class="secondary" disabled>Stop</button>
       <button id="downloadBtn" class="secondary" disabled>mp3 다운로드</button>
     </div>
@@ -667,7 +667,7 @@ function setReading(isReading) {
   playBtn.disabled = isReading;
   stopBtn.disabled = !isReading;
   stopBtnMain.disabled = !isReading;
-  playOverlayBtn.disabled = isReading || !audioReady;
+  playOverlayBtn.disabled = isReading;
   statusEl.textContent = isReading ? 'reading…' : 'idle';
 }
 
