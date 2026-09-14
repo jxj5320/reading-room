@@ -814,9 +814,10 @@ async function playPolly() {
   playOverlayBtn.disabled = true;
   setDownloadEnabled(false);
 
+  const isGenerative = engine === 'generative';
   const ssmlBody = groups.map((grp, gi) => {
     const text = grp.map(s => escapeSsml(s.textContent)).join(' ');
-    return `<mark name="g${gi}"/>${text}`;
+    return isGenerative ? text : `<mark name="g${gi}"/>${text}`;
   }).join(' ');
 
   if (!ssmlBody.trim()) {
@@ -829,16 +830,18 @@ async function playPolly() {
   const baseBody = { Text: ssml, VoiceId: voiceId, Engine: engine, TextType: 'ssml' };
 
   try {
-    const marksRes = await pollySignedFetch({
-      accessKey, secretKey, region,
-      bodyObj: { ...baseBody, OutputFormat: 'json', SpeechMarkTypes: ['ssml'] }
-    });
-    const marksText = await marksRes.text();
-    pollyMarks = marksText.trim().split('\n').filter(Boolean)
-      .map(line => JSON.parse(line))
-      .filter(m => m.type === 'ssml' && /^g\d+$/.test(m.value))
-      .map(m => ({ time: m.time, group: Number(m.value.slice(1)) }))
-      .sort((a, b) => a.time - b.time);
+    if (!isGenerative) {
+      const marksRes = await pollySignedFetch({
+        accessKey, secretKey, region,
+        bodyObj: { ...baseBody, OutputFormat: 'json', SpeechMarkTypes: ['ssml'] }
+      });
+      const marksText = await marksRes.text();
+      pollyMarks = marksText.trim().split('\n').filter(Boolean)
+        .map(line => JSON.parse(line))
+        .filter(m => m.type === 'ssml' && /^g\d+$/.test(m.value))
+        .map(m => ({ time: m.time, group: Number(m.value.slice(1)) }))
+        .sort((a, b) => a.time - b.time);
+    }
 
     const audioRes = await pollySignedFetch({
       accessKey, secretKey, region,
@@ -849,6 +852,23 @@ async function playPolly() {
     if (pollyAudioUrl) URL.revokeObjectURL(pollyAudioUrl);
     pollyAudioUrl = URL.createObjectURL(blob);
     audioPlayer.src = pollyAudioUrl;
+
+    if (isGenerative) {
+      /* 생성형 엔진은 스피치마크(타이밍 정보) 자체를 지원하지 않아서,
+         오디오 길이를 확인한 뒤 글자 수 비율로 구간별 시작 시점을 추정해요. */
+      const durationMs = await new Promise((resolve) => {
+        audioPlayer.onloadedmetadata = () => resolve(audioPlayer.duration * 1000);
+        audioPlayer.load();
+      });
+      const weights = groups.map(grp => grp.reduce((sum, s) => sum + s.textContent.length + 1, 0));
+      const total = weights.reduce((a, b) => a + b, 0) || 1;
+      let acc = 0;
+      pollyMarks = weights.map((w, gi) => {
+        const mark = { time: (acc / total) * durationMs, group: gi };
+        acc += w;
+        return mark;
+      });
+    }
 
     setDownloadEnabled(true);
     audioReady = true;
