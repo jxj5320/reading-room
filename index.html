@@ -1153,43 +1153,72 @@ async function generateVideo() {
   if (attachedImageData) {
     try { img = await loadImageEl(attachedImageData); } catch (e) { img = null; }
   }
-  const paragraphSentence = computeParagraphSentence();
+
+  const LINE_HEIGHT = 50;
+  const TEXT_X = 50;
+  const TEXT_W = W - 100;
+
+  // one-time layout pass (measure only) to find each group's vertical
+  // position in the full document, so we know where to scroll to.
+  let textAreaTop = 40;
+  if (img) {
+    const maxImgH = H * 0.28;
+    const scale = Math.min((W - 80) / img.width, maxImgH / img.height);
+    textAreaTop = 40 + img.height * scale + 40;
+  }
+  const viewportH = H - textAreaTop;
+
+  const groupY = {};
+  let totalHeight = 0;
+  {
+    let y = 0;
+    renderParagraphs.forEach(paragraph => {
+      if (paragraph.length === 0) { y += LINE_HEIGHT; return; }
+      let cx = TEXT_X, cy = y;
+      paragraph.forEach(tok => {
+        ctx.font = tok.cls === 'en' ? '600 34px "Source Serif 4", serif' : '400 34px "Source Serif 4", serif';
+        const w = ctx.measureText(tok.text).width;
+        const spaceWidth = ctx.measureText(' ').width;
+        if (cx + w > TEXT_X + TEXT_W) { cx = TEXT_X; cy += LINE_HEIGHT; }
+        if (tok.cls === 'en' && !(tok.group in groupY)) groupY[tok.group] = cy;
+        cx += w + spaceWidth;
+      });
+      y = cy + LINE_HEIGHT + 14;
+    });
+    totalHeight = y;
+  }
+
+  let scrollY = 0;
+  const maxScroll = Math.max(0, totalHeight - viewportH);
 
   function drawFrame() {
     ctx.fillStyle = '#faf7f1';
     ctx.fillRect(0, 0, W, H);
-    let imgBottom = 40;
     if (img) {
       const maxImgH = H * 0.28;
       const scale = Math.min((W - 80) / img.width, maxImgH / img.height);
       const iw = img.width * scale, ih = img.height * scale;
-      const ix = (W - iw) / 2;
-      ctx.drawImage(img, ix, 40, iw, ih);
-      imgBottom = 40 + ih;
+      ctx.drawImage(img, (W - iw) / 2, 40, iw, ih);
     }
     ctx.textBaseline = 'alphabetic';
 
     const activeGroup = currentActiveGroup();
-    const activeSentence = activeGroup >= 0 ? groupSentence[activeGroup] : 0;
-    const cardParagraphs = renderParagraphs.filter((p, i) => paragraphSentence[i] === activeSentence);
+    if (activeGroup >= 0 && groupY[activeGroup] != null) {
+      const target = Math.min(maxScroll, Math.max(0, groupY[activeGroup] - viewportH * 0.4));
+      scrollY += (target - scrollY) * 0.12;
+    }
 
-    // measure total height first so the card can be vertically centered
-    // in the space below the image (or the whole canvas if there's no image).
-    const lineHeight = 50;
-    const areaTop = img ? imgBottom + 50 : 0;
-    const areaHeight = H - areaTop;
-    let measuredY = 0;
-    cardParagraphs.forEach(paragraph => {
-      if (paragraph.length === 0) { measuredY += lineHeight; return; }
-      measuredY = wrapCanvasText(ctx, paragraph, 50, measuredY, W - 100, lineHeight, activeGroup, true);
-      measuredY += 14;
-    });
-    let y = areaTop + Math.max(40, (areaHeight - measuredY) / 2) + lineHeight * 0.7;
-    cardParagraphs.forEach(paragraph => {
-      if (paragraph.length === 0) { y += lineHeight; return; }
-      y = wrapCanvasText(ctx, paragraph, 50, y, W - 100, lineHeight, activeGroup, false);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, textAreaTop, W, viewportH);
+    ctx.clip();
+    let y = textAreaTop - scrollY;
+    renderParagraphs.forEach(paragraph => {
+      if (paragraph.length === 0) { y += LINE_HEIGHT; return; }
+      y = wrapCanvasText(ctx, paragraph, TEXT_X, y, TEXT_W, LINE_HEIGHT, activeGroup, false);
       y += 14;
     });
+    ctx.restore();
   }
 
   const canvasStream = videoCanvas.captureStream(30);
