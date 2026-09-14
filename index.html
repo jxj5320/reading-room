@@ -402,6 +402,7 @@
         키는 저장되지 않고 새로고침하면 사라져요(보안). 나머지 설정과 입력한 텍스트, 사진은 이 브라우저에 저장돼서 다시 들어와도 남아있어요.
       </div>
       <button class="settings-close" id="settingsCloseBtn">닫기</button>
+      <button class="settings-close" id="lockNowBtn" style="margin-top:8px; background:transparent; color:var(--ink); border-color:var(--line);">🔒 잠그기</button>
     </div>
   </div>
 
@@ -591,6 +592,18 @@ const settingsView = document.getElementById('settingsView');
 const lockPassword = document.getElementById('lockPassword');
 const lockError = document.getElementById('lockError');
 const unlockBtn = document.getElementById('unlockBtn');
+const lockNowBtn = document.getElementById('lockNowBtn');
+const UNLOCK_SESSION_KEY = 'erroom_settings_unlocked';
+
+function isUnlocked() {
+  try { return sessionStorage.getItem(UNLOCK_SESSION_KEY) === '1'; } catch (e) { return false; }
+}
+function setUnlocked(val) {
+  try {
+    if (val) sessionStorage.setItem(UNLOCK_SESSION_KEY, '1');
+    else sessionStorage.removeItem(UNLOCK_SESSION_KEY);
+  } catch (e) { /* ignore */ }
+}
 
 function showLockView() {
   lockView.style.display = '';
@@ -598,11 +611,15 @@ function showLockView() {
   lockPassword.value = '';
   lockError.style.display = 'none';
 }
+function showSettingsView() {
+  lockView.style.display = 'none';
+  settingsView.style.display = '';
+}
 
 function tryUnlock() {
   if (lockPassword.value === LOCK_CODE) {
-    lockView.style.display = 'none';
-    settingsView.style.display = '';
+    setUnlocked(true);
+    showSettingsView();
   } else {
     lockError.style.display = '';
     lockPassword.value = '';
@@ -611,17 +628,17 @@ function tryUnlock() {
 }
 unlockBtn.addEventListener('click', tryUnlock);
 lockPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
+lockNowBtn.addEventListener('click', () => { setUnlocked(false); showLockView(); });
 
 gearBtn.addEventListener('click', () => {
   const opening = !settingsPanel.classList.contains('open');
   settingsPanel.classList.toggle('open');
-  if (opening) showLockView();
+  if (opening) { isUnlocked() ? showSettingsView() : showLockView(); }
 });
-settingsCloseBtn.addEventListener('click', () => { settingsPanel.classList.remove('open'); showLockView(); });
+settingsCloseBtn.addEventListener('click', () => { settingsPanel.classList.remove('open'); });
 document.addEventListener('click', (e) => {
   if (!settingsPanel.contains(e.target) && e.target !== gearBtn && settingsPanel.classList.contains('open')) {
     settingsPanel.classList.remove('open');
-    showLockView();
   }
 });
 
@@ -785,7 +802,7 @@ async function playPolly() {
   if (!accessKey || !secretKey) {
     setStatus('설정(⚙)에서 Access Key와 Secret Key를 입력해주세요.', 'err');
     settingsPanel.classList.add('open');
-    showLockView();
+    isUnlocked() ? showSettingsView() : showLockView();
     return;
   }
 
