@@ -640,7 +640,9 @@ let attachedImageData = null;
 let pollyMarks = [];
 let pollyAudioUrl = null;
 let rafId = null;
-let loopSentenceIndex = null;
+let loopRunIndex = null;
+let groupRuns = [];
+let newlineBeforeGroup = [];
 let loopHandler = null;
 let playCount = 0;
 let audioReady = false;
@@ -806,6 +808,7 @@ function buildPhrase(text) {
   groups = [];
   groupSentence = [];
   groupEls = [];
+  newlineBeforeGroup = [];
   koGroups = [];
   koGroupSentence = [];
   koGroupEls = [];
@@ -820,12 +823,17 @@ function buildPhrase(text) {
   let currentKoGroup = null;
   let currentKoGroupEl = null;
   let koBreakPending = true;
+  let sawNewlineSinceLastGroup = false;
 
   // Whitespace between words belongs inside the current group's wrapper
   // element (so the highlight background is one continuous block, not one
   // box per word) whenever we're still in the middle of an English or
-  // Korean group; otherwise it's appended directly to the phrase.
-  function appendPiece(node) {
+  // Korean group; otherwise it's appended directly to the phrase. A
+  // whitespace chunk that contains a line break is never absorbed into a
+  // wrapper — otherwise the highlight "leaks" a thin sliver onto the start
+  // of the next line.
+  function appendPiece(node, hasNewline) {
+    if (hasNewline) { overlayPhrase.appendChild(node); return; }
     if (currentGroupEl && !breakPending) currentGroupEl.appendChild(node);
     else if (currentKoGroupEl && inTranslation && !koBreakPending) currentKoGroupEl.appendChild(node);
     else overlayPhrase.appendChild(node);
@@ -834,12 +842,21 @@ function buildPhrase(text) {
   const tokens = text.split(/(\s+)/);
   tokens.forEach(tok => {
     if (tok.trim() === '') {
-      appendPiece(document.createTextNode(tok));
       const breaks = (tok.match(/\n/g) || []).length;
+      appendPiece(document.createTextNode(tok), breaks > 0);
       for (let i = 0; i < breaks; i++) renderParagraphs.push([]);
+      if (breaks > 0) {
+        // any line break ends the current group's wrapper so its highlight
+        // can't spill onto the next line, and marks that the NEXT group
+        // starts on a new visual line (used to place one repeat button per
+        // line the person actually typed, instead of one per sentence)
+        breakPending = true;
+        koBreakPending = true;
+        sawNewlineSinceLastGroup = true;
+      }
       if (breaks >= 2) {
         pendingNewSentence = true; inTranslation = false;
-        currentKoGroup = null; currentKoGroupEl = null; koBreakPending = true;
+        currentKoGroup = null; currentKoGroupEl = null;
       }
       return;
     }
@@ -853,6 +870,8 @@ function buildPhrase(text) {
       if (breakPending || currentGroup === null) {
         currentGroup = [];
         groups.push(currentGroup);
+        newlineBeforeGroup.push(sawNewlineSinceLastGroup);
+        sawNewlineSinceLastGroup = false;
         currentGroupEl = document.createElement('span');
         currentGroupEl.className = 'grp-en';
         overlayPhrase.appendChild(currentGroupEl);
@@ -1282,21 +1301,33 @@ playOverlayBtn.addEventListener('click', async () => {
 
 function stopGroupLoop() {
   if (loopHandler) { audioPlayer.removeEventListener('timeupdate', loopHandler); loopHandler = null; }
-  if (loopSentenceIndex !== null) {
-    const btn = document.querySelector(`.repeat-btn[data-sentence="${loopSentenceIndex}"]`);
+  if (loopRunIndex !== null) {
+    const btn = document.querySelector(`.repeat-btn[data-run="${loopRunIndex}"]`);
     if (btn) btn.classList.remove('looping');
   }
-  loopSentenceIndex = null;
+  loopRunIndex = null;
 }
 
-function startSentenceLoop(si) {
-  if (!pollyMarks.length) return;
-  const groupIndices = groupSentence.reduce((arr, s, gi) => { if (s === si) arr.push(gi); return arr; }, []);
-  if (!groupIndices.length) return;
-  const firstGi = groupIndices[0];
-  const lastGi = groupIndices[groupIndices.length - 1];
+// 그룹들을 "실제 줄바꿈"이 있는 지점마다 하나의 구간(run)으로 묶어요.
+// 같은 줄에 "/"로 여러 구절이 이어져 있으면 한 구간(버튼 1개)으로,
+// 줄을 나눠 입력하면 그만큼 구간이 나뉘어서 버튼도 그만큼 생겨요.
+function computeGroupRuns() {
+  const runs = [];
+  let start = 0;
+  for (let gi = 1; gi <= groups.length; gi++) {
+    if (gi === groups.length || newlineBeforeGroup[gi]) {
+      runs.push({ start, end: gi - 1 });
+      start = gi;
+    }
+  }
+  return runs;
+}
 
-  const wasLooping = loopSentenceIndex === si;
+function startRunLoop(ri) {
+  if (!pollyMarks.length || !groupRuns[ri]) return;
+  const { start: firstGi, end: lastGi } = groupRuns[ri];
+
+  const wasLooping = loopRunIndex === ri;
   stopGroupLoop();
   if (rafId) cancelAnimationFrame(rafId);
   if (wasLooping) {
@@ -1307,8 +1338,8 @@ function startSentenceLoop(si) {
   }
   const startMs = pollyMarks[firstGi].time;
   const endMs = pollyMarks[lastGi + 1] ? pollyMarks[lastGi + 1].time : (audioPlayer.duration * 1000 || startMs + 3000);
-  loopSentenceIndex = si;
-  const btn = document.querySelector(`.repeat-btn[data-sentence="${si}"]`);
+  loopRunIndex = ri;
+  const btn = document.querySelector(`.repeat-btn[data-run="${ri}"]`);
   if (btn) btn.classList.add('looping');
   setReading(true);
   audioPlayer.currentTime = startMs / 1000;
@@ -1321,7 +1352,7 @@ function startSentenceLoop(si) {
       if (pollyMarks[i].time <= ms) group = pollyMarks[i].group; else break;
     }
     if (group >= 0) highlightGroup(group);
-    if (loopSentenceIndex === si) rafId = requestAnimationFrame(step);
+    if (loopRunIndex === ri) rafId = requestAnimationFrame(step);
   };
   rafId = requestAnimationFrame(step);
 
@@ -1335,21 +1366,19 @@ function startSentenceLoop(si) {
 
 function insertRepeatButtons() {
   document.querySelectorAll('.repeat-btn').forEach(b => b.remove());
-  const sentenceCount = groupSentence.length ? Math.max(...groupSentence) + 1 : 0;
-  for (let si = 0; si < sentenceCount; si++) {
-    let lastGi = -1;
-    groupSentence.forEach((s, gi) => { if (s === si) lastGi = gi; });
-    if (lastGi === -1) continue;
-    const grp = groups[lastGi];
+  groupRuns = computeGroupRuns();
+  groupRuns.forEach((run, ri) => {
+    const grp = groups[run.end];
+    if (!grp || !grp.length) return;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'repeat-btn';
-    btn.dataset.sentence = si;
+    btn.dataset.run = ri;
     btn.textContent = '🔁';
-    btn.title = '이 문장만 반복 재생';
-    btn.addEventListener('click', () => startSentenceLoop(si));
+    btn.title = '이 구간만 반복 재생';
+    btn.addEventListener('click', () => startRunLoop(ri));
     grp[grp.length - 1].insertAdjacentElement('afterend', btn);
-  }
+  });
 }
 
 function stopReading() {
