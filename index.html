@@ -963,6 +963,33 @@ function closeOverlay() {
 }
 closeOverlayBtn.addEventListener('click', closeOverlay);
 
+/* 모바일 브라우저(특히 iOS Safari)는 새 오디오를 로드한 뒤 처음 재생할 때
+   맨 앞부분(첫 음절)이 살짝 잘려서 들리는 경우가 있어요. 오디오를 실제로
+   들려주기 전에 소리 없이 한 번 재생→일시정지 해서 오디오 파이프라인을
+   "예열"해두면 이 문제가 없어져요. */
+function primeAudio() {
+  return new Promise((resolve) => {
+    const onReady = () => {
+      audioPlayer.removeEventListener('canplay', onReady);
+      audioPlayer.muted = true;
+      const finish = () => {
+        audioPlayer.pause();
+        audioPlayer.currentTime = 0;
+        audioPlayer.muted = false;
+        resolve();
+      };
+      const p = audioPlayer.play();
+      if (p && typeof p.then === 'function') {
+        p.then(finish).catch(() => { audioPlayer.muted = false; resolve(); });
+      } else {
+        finish();
+      }
+    };
+    audioPlayer.addEventListener('canplay', onReady, { once: true });
+    audioPlayer.load();
+  });
+}
+
 /* ---------- Polly playback ---------- */
 async function playPolly() {
   const rawText = input.value.trim();
@@ -1034,14 +1061,12 @@ async function playPolly() {
     if (pollyAudioUrl) URL.revokeObjectURL(pollyAudioUrl);
     pollyAudioUrl = URL.createObjectURL(blob);
     audioPlayer.src = pollyAudioUrl;
+    await primeAudio();
 
     if (isGenerative) {
       /* 생성형 엔진은 스피치마크(타이밍 정보) 자체를 지원하지 않아서,
          오디오 길이를 확인한 뒤 글자 수 비율로 구간별 시작 시점을 추정해요. */
-      const durationMs = await new Promise((resolve) => {
-        audioPlayer.onloadedmetadata = () => resolve(audioPlayer.duration * 1000);
-        audioPlayer.load();
-      });
+      const durationMs = audioPlayer.duration * 1000;
       const weights = groups.map(grp => grp.reduce((sum, s) => sum + s.textContent.length + 1, 0));
       const total = weights.reduce((a, b) => a + b, 0) || 1;
       let acc = 0;
@@ -1137,6 +1162,7 @@ async function playElevenLabs(rawText) {
     if (pollyAudioUrl) URL.revokeObjectURL(pollyAudioUrl);
     pollyAudioUrl = URL.createObjectURL(blob);
     audioPlayer.src = pollyAudioUrl;
+    await primeAudio();
     audioPlayer.playbackRate = rate; // ElevenLabs has no SSML speed control, so we speed up playback instead
 
     const align = data.alignment || data.normalized_alignment;
