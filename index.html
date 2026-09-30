@@ -449,11 +449,24 @@
           <input type="password" id="elevenApiKey" autocomplete="off" placeholder="sk_...">
         </div>
         <div class="field">
+          <label>저장된 목소리</label>
+          <select id="elevenVoicePreset">
+            <option value="">— 목록에서 선택 —</option>
+          </select>
+        </div>
+        <div class="field">
           <label>Voice ID</label>
           <input type="text" id="elevenVoiceId" autocomplete="off" placeholder="예: Mina 목소리의 Voice ID">
         </div>
+        <div class="field" style="display:flex; gap:8px; align-items:flex-end;">
+          <div style="flex:1;">
+            <label>이 목소리 이름 붙여 저장</label>
+            <input type="text" id="elevenVoiceName" autocomplete="off" placeholder="예: Nikki">
+          </div>
+          <button type="button" id="elevenSaveVoiceBtn" class="settings-close" style="width:auto; padding:9px 14px; margin:0;">+ 저장</button>
+        </div>
         <div class="settings-note">
-          쓰고 싶은 목소리(예: Mina) 페이지에서 먼저 "Add to my voices(내 보이스에 추가)"를 누른 뒤, 그 목소리의 "⋮" 메뉴나 상세페이지에서 Voice ID를 복사해 붙여넣어주세요. API Key는 ElevenLabs 사이트 오른쪽 위 프로필 → API Keys에서 발급받을 수 있어요.
+          새 목소리를 쓰려면: ElevenLabs에서 그 목소리 페이지 → "Add to my voices(내 보이스에 추가)" → "⋮" 메뉴나 상세페이지에서 Voice ID 복사 → 위 Voice ID 칸에 붙여넣고 이름을 붙여 "+ 저장"을 누르면 다음부터 "저장된 목소리" 목록에서 바로 고를 수 있어요. API Key는 ElevenLabs 사이트 오른쪽 위 프로필 → API Keys에서 발급받을 수 있어요.
         </div>
       </div>
 
@@ -563,6 +576,9 @@ const pollyFields = document.getElementById('pollyFields');
 const elevenFields = document.getElementById('elevenFields');
 const elevenApiKey = document.getElementById('elevenApiKey');
 const elevenVoiceId = document.getElementById('elevenVoiceId');
+const elevenVoicePreset = document.getElementById('elevenVoicePreset');
+const elevenVoiceName = document.getElementById('elevenVoiceName');
+const elevenSaveVoiceBtn = document.getElementById('elevenSaveVoiceBtn');
 
 function updateProviderFields() {
   const isEleven = ttsProvider.value === 'elevenlabs';
@@ -570,6 +586,45 @@ function updateProviderFields() {
   elevenFields.style.display = isEleven ? '' : 'none';
 }
 ttsProvider.addEventListener('change', () => { updateProviderFields(); saveState(); });
+
+/* ---------- ElevenLabs saved-voice presets (이름 붙여서 저장해두고 목록에서 고르기) ---------- */
+let elevenSavedVoices = [];
+
+function renderElevenVoicePresets() {
+  const current = elevenVoiceId.value.trim();
+  elevenVoicePreset.innerHTML = '<option value="">— 목록에서 선택 —</option>';
+  elevenSavedVoices.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = v.name;
+    elevenVoicePreset.appendChild(opt);
+  });
+  const match = elevenSavedVoices.find(v => v.id === current);
+  elevenVoicePreset.value = match ? match.id : '';
+}
+
+elevenVoicePreset.addEventListener('change', () => {
+  if (elevenVoicePreset.value) {
+    elevenVoiceId.value = elevenVoicePreset.value;
+    const match = elevenSavedVoices.find(v => v.id === elevenVoicePreset.value);
+    if (match) elevenVoiceName.value = match.name;
+    saveState();
+  }
+});
+
+elevenSaveVoiceBtn.addEventListener('click', () => {
+  const id = elevenVoiceId.value.trim();
+  const name = elevenVoiceName.value.trim();
+  if (!id) { setStatus('저장할 Voice ID를 먼저 입력해주세요.', 'err'); return; }
+  if (!name) { setStatus('이 목소리에 붙일 이름을 입력해주세요.', 'err'); return; }
+  const existing = elevenSavedVoices.find(v => v.id === id);
+  if (existing) existing.name = name;
+  else elevenSavedVoices.push({ name, id });
+  renderElevenVoicePresets();
+  elevenVoicePreset.value = id;
+  setStatus(`"${name}" 목소리를 저장했어요.`, 'ok');
+  saveState();
+});
 
 let wordSpans = [];
 let spokenSpans = [];
@@ -609,7 +664,9 @@ function saveState() {
       secretKey: pollySecretKey.value,
       provider: ttsProvider.value,
       elevenApiKey: elevenApiKey.value,
-      elevenVoiceId: elevenVoiceId.value
+      elevenVoiceId: elevenVoiceId.value,
+      elevenVoiceName: elevenVoiceName.value,
+      elevenSavedVoices: elevenSavedVoices
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) { /* storage full or unavailable — ignore */ }
@@ -632,15 +689,18 @@ function loadState() {
     if (state.provider) ttsProvider.value = state.provider;
     if (state.elevenApiKey) elevenApiKey.value = state.elevenApiKey;
     if (state.elevenVoiceId) elevenVoiceId.value = state.elevenVoiceId;
+    if (state.elevenVoiceName) elevenVoiceName.value = state.elevenVoiceName;
+    if (Array.isArray(state.elevenSavedVoices)) elevenSavedVoices = state.elevenSavedVoices;
   } catch (e) { /* ignore corrupt data */ }
 }
 loadState();
 updateProviderFields();
+renderElevenVoicePresets();
 updatePlayCountDisplay();
 
 /* 요청에 따라 키를 이 브라우저에 저장합니다. 이 기기를 다른 사람과 같이 쓰거나
    분실 위험이 있다면, AWS IAM 콘솔에서 해당 액세스 키를 비활성화/재발급하면 됩니다. */
-[pollyAccessKey, pollySecretKey, elevenApiKey, elevenVoiceId].forEach(el => el.addEventListener('input', saveState));
+[pollyAccessKey, pollySecretKey, elevenApiKey, elevenVoiceId, elevenVoiceName].forEach(el => el.addEventListener('input', saveState));
 
 /* 저장된 글이 있으면 편집 화면 대신 바로 낭독 화면으로 진입 */
 if (input.value.trim()) {
