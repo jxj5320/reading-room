@@ -302,7 +302,8 @@
 
   .word.en { color: var(--ink); font-weight: 600; }
   .word.ko { color: var(--dim); font-weight: 400; }
-  .word.active { color: #e02424; }
+  .word.active { color: #e02424; background: rgba(224, 36, 36, 0.18); }
+  .word.active-ko { background: rgba(224, 36, 36, 0.28); border-radius: 3px; }
 
   .repeat-btn {
     display: inline-flex;
@@ -527,6 +528,8 @@ let wordSpans = [];
 let spokenSpans = [];
 let spokenIndexToGroup = [];
 let groups = [];
+let koGroups = [];
+let koGroupSentence = [];
 let groupSentence = [];
 let renderParagraphs = [[]];
 let attachedImageData = null;
@@ -686,12 +689,17 @@ function buildPhrase(text) {
   spokenSpans = [];
   groups = [];
   groupSentence = [];
+  koGroups = [];
+  koGroupSentence = [];
   spokenIndexToGroup = [];
   renderParagraphs = [[]];
   let currentGroup = null;
   let breakPending = true;
   let sentenceIndex = -1;
   let pendingNewSentence = true;
+  let inTranslation = false;
+  let currentKoGroup = null;
+  let koBreakPending = true;
 
   const tokens = text.split(/(\s+)/);
   tokens.forEach(tok => {
@@ -699,7 +707,7 @@ function buildPhrase(text) {
       overlayPhrase.appendChild(document.createTextNode(tok));
       const breaks = (tok.match(/\n/g) || []).length;
       for (let i = 0; i < breaks; i++) renderParagraphs.push([]);
-      if (breaks >= 2) pendingNewSentence = true;
+      if (breaks >= 2) { pendingNewSentence = true; inTranslation = false; currentKoGroup = null; koBreakPending = true; }
       return;
     }
     const span = document.createElement('span');
@@ -725,13 +733,37 @@ function buildPhrase(text) {
       span.classList.add('ko');
       breakPending = true;
       if (/^\d+[.)]$/.test(tok.trim())) pendingNewSentence = true;
+
+      // translation-line tracking: everything from a "→" token to the next
+      // sentence break is treated as the Korean translation for this sentence,
+      // and is itself split into "/"-delimited groups the same way English is,
+      // so the i-th Korean group pairs with the i-th English group of the
+      // same sentence.
+      if (tok.trim().includes('→')) {
+        inTranslation = true;
+        currentKoGroup = null;
+        koBreakPending = true;
+      } else if (inTranslation) {
+        if (tok.trim() === '/') {
+          koBreakPending = true;
+        } else {
+          if (koBreakPending || currentKoGroup === null) {
+            currentKoGroup = [];
+            koGroups.push(currentKoGroup);
+            koGroupSentence.push(sentenceIndex);
+            koBreakPending = false;
+          }
+          currentKoGroup.push(span);
+        }
+      }
+
       renderParagraphs[renderParagraphs.length - 1].push({ text: tok, cls: 'ko', group: -1 });
     }
   });
 }
 
 function clearHighlight() {
-  wordSpans.forEach(s => s.classList.remove('active'));
+  wordSpans.forEach(s => s.classList.remove('active', 'active-ko'));
 }
 
 function highlightGroup(activeGroup) {
@@ -741,6 +773,20 @@ function highlightGroup(activeGroup) {
       else span.classList.remove('active');
     });
   });
+
+  koGroups.forEach(grp => grp.forEach(span => span.classList.remove('active-ko')));
+  if (activeGroup >= 0 && groupSentence[activeGroup] != null) {
+    const si = groupSentence[activeGroup];
+    const localIdx = groups.reduce((count, g, gi) => {
+      if (gi < activeGroup && groupSentence[gi] === si) return count + 1;
+      return count;
+    }, 0);
+    const koIndicesForSentence = koGroupSentence.reduce((arr, s, ki) => { if (s === si) arr.push(ki); return arr; }, []);
+    const koIdx = koIndicesForSentence[localIdx];
+    if (koIdx != null) {
+      koGroups[koIdx].forEach(span => span.classList.add('active-ko'));
+    }
+  }
 }
 
 function setReading(isReading) {
@@ -1237,19 +1283,23 @@ async function generateVideo() {
 
   setStatus('동영상 만드는 중… (재생 시간만큼 걸려요)', '');
   audioPlayer.currentTime = 0;
+  scrollY = 0;
+  drawFrame(); // paint the very first frame before recording starts, so there's no blank lead-in
   recorder.start();
 
+  let recording = true;
   let rafVideoId = null;
   const draw = () => {
     drawFrame();
-    if (!audioPlayer.paused && !audioPlayer.ended) rafVideoId = requestAnimationFrame(draw);
+    if (recording) rafVideoId = requestAnimationFrame(draw);
   };
+  rafVideoId = requestAnimationFrame(draw);
 
   const prevOnEnded = audioPlayer.onended;
-  await audioPlayer.play();
-  draw();
+  audioPlayer.play();
 
   await new Promise(resolve => { audioPlayer.onended = resolve; });
+  recording = false;
   audioPlayer.onended = prevOnEnded;
   if (rafVideoId) cancelAnimationFrame(rafVideoId);
   recorder.stop();
