@@ -374,66 +374,91 @@
       <button class="settings-close" id="unlockBtn">확인</button>
     </div>
     <div id="settingsView" style="display:none;">
-      <h2>Amazon Polly 설정</h2>
+      <h2>음성(TTS) 설정</h2>
       <div class="field">
-        <label>AWS Access Key ID</label>
-        <input type="text" id="pollyAccessKey" autocomplete="off" placeholder="AKIA...">
-      </div>
-      <div class="field">
-        <label>AWS Secret Access Key</label>
-        <input type="password" id="pollySecretKey" autocomplete="off" placeholder="••••••••">
-      </div>
-      <div class="field">
-        <label>리전</label>
-        <select id="pollyRegion">
-          <option value="us-east-1">us-east-1 (N. Virginia)</option>
-          <option value="us-west-2">us-west-2 (Oregon)</option>
-          <option value="ap-northeast-2">ap-northeast-2 (Seoul)</option>
-          <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
-          <option value="eu-west-1">eu-west-1 (Ireland)</option>
+        <label>TTS 제공자</label>
+        <select id="ttsProvider">
+          <option value="polly" selected>Amazon Polly</option>
+          <option value="elevenlabs">ElevenLabs</option>
         </select>
       </div>
-      <div class="field">
-        <label>엔진</label>
-        <select id="pollyEngine">
-          <option value="generative" selected>generative (가장 자연스러움, Tiffany 등)</option>
-          <option value="neural">neural (자연스러움, 리전 제한 있음)</option>
-          <option value="standard">standard (모든 리전 가능)</option>
-        </select>
+
+      <div id="pollyFields">
+        <div class="field">
+          <label>AWS Access Key ID</label>
+          <input type="text" id="pollyAccessKey" autocomplete="off" placeholder="AKIA...">
+        </div>
+        <div class="field">
+          <label>AWS Secret Access Key</label>
+          <input type="password" id="pollySecretKey" autocomplete="off" placeholder="••••••••">
+        </div>
+        <div class="field">
+          <label>리전</label>
+          <select id="pollyRegion">
+            <option value="us-east-1">us-east-1 (N. Virginia)</option>
+            <option value="us-west-2">us-west-2 (Oregon)</option>
+            <option value="ap-northeast-2">ap-northeast-2 (Seoul)</option>
+            <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+            <option value="eu-west-1">eu-west-1 (Ireland)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>엔진</label>
+          <select id="pollyEngine">
+            <option value="generative" selected>generative (가장 자연스러움, Tiffany 등)</option>
+            <option value="neural">neural (자연스러움, 리전 제한 있음)</option>
+            <option value="standard">standard (모든 리전 가능)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>목소리</label>
+          <select id="pollyVoice">
+            <optgroup label="생성형(Generative)">
+              <option value="Tiffany" selected>Tiffany (여)</option>
+              <option value="Matthew">Matthew (남)</option>
+              <option value="Ruth">Ruth (여)</option>
+              <option value="Stephen">Stephen (남)</option>
+            </optgroup>
+            <optgroup label="미국 발음 - 여성">
+              <option value="Joanna">Joanna</option>
+              <option value="Kendra">Kendra</option>
+              <option value="Kimberly">Kimberly</option>
+              <option value="Salli">Salli</option>
+              <option value="Ivy">Ivy (아동톤)</option>
+            </optgroup>
+            <optgroup label="미국 발음 - 남성">
+              <option value="Joey">Joey</option>
+              <option value="Justin">Justin (아동톤)</option>
+            </optgroup>
+            <optgroup label="영국 발음">
+              <option value="Amy">Amy (여)</option>
+              <option value="Emma">Emma (여)</option>
+              <option value="Brian">Brian (남)</option>
+              <option value="Arthur">Arthur (남)</option>
+            </optgroup>
+            <optgroup label="호주 발음">
+              <option value="Olivia">Olivia (여)</option>
+            </optgroup>
+          </select>
+        </div>
       </div>
-      <div class="field">
-        <label>목소리</label>
-        <select id="pollyVoice">
-          <optgroup label="생성형(Generative)">
-            <option value="Tiffany" selected>Tiffany (여)</option>
-            <option value="Matthew">Matthew (남)</option>
-            <option value="Ruth">Ruth (여)</option>
-            <option value="Stephen">Stephen (남)</option>
-          </optgroup>
-          <optgroup label="미국 발음 - 여성">
-            <option value="Joanna">Joanna</option>
-            <option value="Kendra">Kendra</option>
-            <option value="Kimberly">Kimberly</option>
-            <option value="Salli">Salli</option>
-            <option value="Ivy">Ivy (아동톤)</option>
-          </optgroup>
-          <optgroup label="미국 발음 - 남성">
-            <option value="Joey">Joey</option>
-            <option value="Justin">Justin (아동톤)</option>
-          </optgroup>
-          <optgroup label="영국 발음">
-            <option value="Amy">Amy (여)</option>
-            <option value="Emma">Emma (여)</option>
-            <option value="Brian">Brian (남)</option>
-            <option value="Arthur">Arthur (남)</option>
-          </optgroup>
-          <optgroup label="호주 발음">
-            <option value="Olivia">Olivia (여)</option>
-          </optgroup>
-        </select>
+
+      <div id="elevenFields" style="display:none;">
+        <div class="field">
+          <label>ElevenLabs API Key</label>
+          <input type="password" id="elevenApiKey" autocomplete="off" placeholder="sk_...">
+        </div>
+        <div class="field">
+          <label>Voice ID</label>
+          <input type="text" id="elevenVoiceId" autocomplete="off" placeholder="예: Mina 목소리의 Voice ID">
+        </div>
+        <div class="settings-note">
+          쓰고 싶은 목소리(예: Mina) 페이지에서 먼저 "Add to my voices(내 보이스에 추가)"를 누른 뒤, 그 목소리의 "⋮" 메뉴나 상세페이지에서 Voice ID를 복사해 붙여넣어주세요. API Key는 ElevenLabs 사이트 오른쪽 위 프로필 → API Keys에서 발급받을 수 있어요.
+        </div>
       </div>
+
       <div class="settings-note">
-        키는 저장되지 않고 새로고침하면 사라져요(보안). 나머지 설정과 입력한 텍스트, 사진은 이 브라우저에 저장돼서 다시 들어와도 남아있어요.
+        키는 이 브라우저에 저장돼서 다시 들어와도 다시 입력할 필요 없어요. 이 기기를 다른 사람과 같이 쓰거나 분실 위험이 있다면 해당 서비스에서 키를 재발급/폐기하면 돼요.
       </div>
       <button class="settings-close" id="settingsCloseBtn">닫기</button>
       <button class="settings-close" id="lockNowBtn" style="margin-top:8px; background:transparent; color:var(--ink); border-color:var(--line);">🔒 잠그기</button>
@@ -533,6 +558,18 @@ const playOverlayBtn = document.getElementById('playOverlayBtn');
 const playCountEl = document.getElementById('playCountEl');
 const pollyAccessKey = document.getElementById('pollyAccessKey');
 const pollySecretKey = document.getElementById('pollySecretKey');
+const ttsProvider = document.getElementById('ttsProvider');
+const pollyFields = document.getElementById('pollyFields');
+const elevenFields = document.getElementById('elevenFields');
+const elevenApiKey = document.getElementById('elevenApiKey');
+const elevenVoiceId = document.getElementById('elevenVoiceId');
+
+function updateProviderFields() {
+  const isEleven = ttsProvider.value === 'elevenlabs';
+  pollyFields.style.display = isEleven ? 'none' : '';
+  elevenFields.style.display = isEleven ? '' : 'none';
+}
+ttsProvider.addEventListener('change', () => { updateProviderFields(); saveState(); });
 
 let wordSpans = [];
 let spokenSpans = [];
@@ -569,7 +606,10 @@ function saveState() {
       rate: rateSelect.value,
       playCount: playCount,
       accessKey: pollyAccessKey.value,
-      secretKey: pollySecretKey.value
+      secretKey: pollySecretKey.value,
+      provider: ttsProvider.value,
+      elevenApiKey: elevenApiKey.value,
+      elevenVoiceId: elevenVoiceId.value
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) { /* storage full or unavailable — ignore */ }
@@ -589,14 +629,18 @@ function loadState() {
     if (typeof state.playCount === 'number') playCount = state.playCount;
     if (state.accessKey) pollyAccessKey.value = state.accessKey;
     if (state.secretKey) pollySecretKey.value = state.secretKey;
+    if (state.provider) ttsProvider.value = state.provider;
+    if (state.elevenApiKey) elevenApiKey.value = state.elevenApiKey;
+    if (state.elevenVoiceId) elevenVoiceId.value = state.elevenVoiceId;
   } catch (e) { /* ignore corrupt data */ }
 }
 loadState();
+updateProviderFields();
 updatePlayCountDisplay();
 
 /* 요청에 따라 키를 이 브라우저에 저장합니다. 이 기기를 다른 사람과 같이 쓰거나
    분실 위험이 있다면, AWS IAM 콘솔에서 해당 액세스 키를 비활성화/재발급하면 됩니다. */
-[pollyAccessKey, pollySecretKey].forEach(el => el.addEventListener('input', saveState));
+[pollyAccessKey, pollySecretKey, elevenApiKey, elevenVoiceId].forEach(el => el.addEventListener('input', saveState));
 
 /* 저장된 글이 있으면 편집 화면 대신 바로 낭독 화면으로 진입 */
 if (input.value.trim()) {
@@ -924,6 +968,11 @@ async function playPolly() {
   const rawText = input.value.trim();
   if (!rawText) return;
 
+  if (ttsProvider.value === 'elevenlabs') {
+    await playElevenLabs(rawText);
+    return;
+  }
+
   const accessKey = document.getElementById('pollyAccessKey').value.trim();
   const secretKey = document.getElementById('pollySecretKey').value.trim();
   const region = pollyRegion.value;
@@ -1002,6 +1051,100 @@ async function playPolly() {
         return mark;
       });
     }
+
+    setDownloadEnabled(true);
+    audioReady = true;
+    insertRepeatButtons();
+    playOverlayBtn.disabled = false;
+    setStatus('준비 완료. Play를 눌러 재생하세요.', 'ok');
+
+    audioPlayer.onended = () => {
+      setReading(false);
+      clearHighlight();
+      if (rafId) cancelAnimationFrame(rafId);
+      playCount += 1;
+      updatePlayCountDisplay();
+      saveState();
+    };
+  } catch (err) {
+    setStatus(err.message || String(err), 'err');
+    setReading(false);
+  } finally {
+    playBtn.disabled = false;
+  }
+}
+
+async function playElevenLabs(rawText) {
+  const apiKey = elevenApiKey.value.trim();
+  const voiceId = elevenVoiceId.value.trim();
+  const rate = Number(rateSelect.value);
+
+  if (!apiKey || !voiceId) {
+    setStatus('설정(⚙)에서 ElevenLabs API Key와 Voice ID를 입력해주세요.', 'err');
+    settingsPanel.classList.add('open');
+    isUnlocked() ? showSettingsView() : showLockView();
+    return;
+  }
+
+  buildPhrase(rawText);
+  openOverlay();
+  setStatus('ElevenLabs에 요청 중…', '');
+  playBtn.disabled = true;
+  audioReady = false;
+  playOverlayBtn.disabled = true;
+  setDownloadEnabled(false);
+
+  // build one plain-text request out of the same "groups" buildPhrase()
+  // already computed, tracking each group's starting character offset so
+  // we can look up its start time in ElevenLabs' per-character alignment.
+  let fullText = '';
+  const groupCharStart = [];
+  groups.forEach((grp, gi) => {
+    if (gi > 0) fullText += ' ';
+    groupCharStart.push(fullText.length);
+    fullText += grp.map(s => s.textContent).join(' ');
+  });
+
+  if (!fullText.trim()) {
+    setStatus('읽을 수 있는 영어 텍스트가 없어요.', 'err');
+    playBtn.disabled = false;
+    return;
+  }
+
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': apiKey,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        text: fullText,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`ElevenLabs 오류 (${res.status}): ${errText.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const bytes = Uint8Array.from(atob(data.audio_base64), c => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: 'audio/mpeg' });
+    if (pollyAudioUrl) URL.revokeObjectURL(pollyAudioUrl);
+    pollyAudioUrl = URL.createObjectURL(blob);
+    audioPlayer.src = pollyAudioUrl;
+    audioPlayer.playbackRate = rate; // ElevenLabs has no SSML speed control, so we speed up playback instead
+
+    const align = data.alignment || data.normalized_alignment;
+    const startTimes = (align && align.character_start_times_seconds) || [];
+    pollyMarks = groups.map((_, gi) => {
+      const idx = Math.min(groupCharStart[gi], Math.max(0, startTimes.length - 1));
+      return { time: (startTimes[idx] || 0) * 1000, group: gi };
+    });
 
     setDownloadEnabled(true);
     audioReady = true;
