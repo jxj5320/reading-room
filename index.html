@@ -640,7 +640,6 @@ let attachedImageData = null;
 let pollyMarks = [];
 let pollyAudioUrl = null;
 let rafId = null;
-let loopRunIndex = null;
 let groupRuns = [];
 let newlineBeforeGroup = [];
 let playCount = 0;
@@ -1034,7 +1033,7 @@ function openOverlay() {
 }
 function closeOverlay() {
   overlay.classList.remove('open');
-  stopGroupLoop();
+  stopRunAudio();
   audioPlayer.pause();
   if (rafId) cancelAnimationFrame(rafId);
   setReading(false);
@@ -1072,6 +1071,8 @@ function primeAudio() {
 async function playPolly() {
   const rawText = input.value.trim();
   if (!rawText) return;
+
+  stopRunAudio();
 
   if (ttsProvider.value === 'elevenlabs') {
     await playElevenLabs(rawText);
@@ -1274,6 +1275,7 @@ async function playElevenLabs(rawText) {
 
 function startPlayback() {
   if (!audioReady) return;
+  stopRunAudio();
   clearHighlight();
   audioPlayer.currentTime = 0;
   setReading(true);
@@ -1298,14 +1300,6 @@ playOverlayBtn.addEventListener('click', async () => {
   if (audioReady) startPlayback();
 });
 
-function stopGroupLoop() {
-  if (loopRunIndex !== null) {
-    const btn = document.querySelector(`.repeat-btn[data-run="${loopRunIndex}"]`);
-    if (btn) btn.classList.remove('looping');
-  }
-  loopRunIndex = null;
-}
-
 // 그룹들을 "실제 줄바꿈"이 있는 지점마다 하나의 구간(run)으로 묶어요.
 // 같은 줄에 "/"로 여러 구절이 이어져 있으면 한 구간(버튼 1개)으로,
 // 줄을 나눠 입력하면 그만큼 구간이 나뉘어서 버튼도 그만큼 생겨요.
@@ -1321,57 +1315,184 @@ function computeGroupRuns() {
   return runs;
 }
 
-function startRunLoop(ri) {
-  if (!pollyMarks.length || !groupRuns[ri]) return;
-  const { start: firstGi, end: lastGi } = groupRuns[ri];
+/* 반복 재생은 전체 오디오 안에서 구간을 잘라 재생하는 대신(경계에서 다음
+   구간 소리가 살짝 섞여 들림), 그 구간만 따로 새로 음성 합성을 요청해서
+   "그 구간이 문장의 전부인 것처럼" 독립된 오디오로 재생해요. 그러면 뒤에
+   이어지는 소리 자체가 없어서 깔끔하게 끝나요. 같은 구간을 다시 누르면
+   재사용하도록 결과를 캐싱해요. */
+let runAudioCache = {};
+let runAudioPlayer = null;
+let runAudioRafId = null;
+let activeRunAudioIndex = null;
 
-  const wasLooping = loopRunIndex === ri;
-  stopGroupLoop();
-  if (rafId) cancelAnimationFrame(rafId);
-  if (wasLooping) {
-    audioPlayer.pause();
-    setReading(false);
-    clearHighlight();
-    return;
+async function synthesizeRunAudio(ri) {
+  if (runAudioCache[ri]) return runAudioCache[ri];
+  const run = groupRuns[ri];
+  const runGroups = groups.slice(run.start, run.end + 1);
+  let audioUrl, marks;
+
+  if (ttsProvider.value === 'elevenlabs') {
+    const apiKey = elevenApiKey.value.trim();
+    const voiceId = elevenVoiceId.value.trim();
+    if (!apiKey || !voiceId) throw new Error('설정(⚙)에서 ElevenLabs API Key와 Voice ID를 입력해주세요.');
+
+    let fullText = '';
+    const localCharStart = [];
+    runGroups.forEach((grp, i) => {
+      if (i > 0) fullText += ' ';
+      localCharStart.push(fullText.length);
+      fullText += grp.map(s => s.textContent).join(' ');
+    });
+
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps`, {
+      method: 'POST',
+      headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        text: fullText,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+      })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`ElevenLabs 오류 (${res.status}): ${errText.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    const bytes = Uint8Array.from(atob(data.audio_base64), c => c.charCodeAt(0));
+    audioUrl = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+    const align = data.alignment || data.normalized_alignment;
+    const startTimes = (align && align.character_start_times_seconds) || [];
+    marks = runGroups.map((_, i) => {
+      const idx = Math.min(localCharStart[i], Math.max(0, startTimes.length - 1));
+      return { time: (startTimes[idx] || 0) * 1000, group: run.start + i };
+    });
+  } else {
+    const accessKey = pollyAccessKey.value.trim();
+    const secretKey = pollySecretKey.value.trim();
+    const region = pollyRegion.value;
+    const engine = pollyEngine.value;
+    const voiceId = pollyVoice.value;
+    if (!accessKey || !secretKey) throw new Error('설정(⚙)에서 Access Key와 Secret Key를 입력해주세요.');
+
+    const isGenerative = engine === 'generative';
+    const ssmlBody = runGroups.map((grp, i) => {
+      const t = grp.map(s => escapeSsml(s.textContent)).join(' ');
+      return isGenerative ? t : `<mark name="g${i}"/>${t}`;
+    }).join(' ');
+    const rate = Number(rateSelect.value);
+    const ssml = `<speak><prosody rate="${Math.round(rate * 100)}%">${ssmlBody}</prosody></speak>`;
+    const baseBody = { Text: ssml, VoiceId: voiceId, Engine: engine, TextType: 'ssml' };
+
+    let localMarks = null;
+    if (!isGenerative) {
+      const marksRes = await pollySignedFetch({
+        accessKey, secretKey, region,
+        bodyObj: { ...baseBody, OutputFormat: 'json', SpeechMarkTypes: ['ssml'] }
+      });
+      const marksText = await marksRes.text();
+      localMarks = marksText.trim().split('\n').filter(Boolean)
+        .map(line => JSON.parse(line))
+        .filter(m => m.type === 'ssml' && /^g\d+$/.test(m.value))
+        .map(m => ({ time: m.time, group: run.start + Number(m.value.slice(1)) }))
+        .sort((a, b) => a.time - b.time);
+    }
+
+    const audioRes = await pollySignedFetch({
+      accessKey, secretKey, region,
+      bodyObj: { ...baseBody, OutputFormat: 'mp3' }
+    });
+    const audioBuf = await audioRes.arrayBuffer();
+    audioUrl = URL.createObjectURL(new Blob([audioBuf], { type: 'audio/mpeg' }));
+
+    if (isGenerative) {
+      const tempAudio = new Audio(audioUrl);
+      const durationMs = await new Promise((resolve) => {
+        tempAudio.onloadedmetadata = () => resolve(tempAudio.duration * 1000);
+        tempAudio.load();
+      });
+      const weights = runGroups.map(grp => grp.reduce((sum, s) => sum + s.textContent.length + 1, 0));
+      const total = weights.reduce((a, b) => a + b, 0) || 1;
+      let acc = 0;
+      marks = weights.map((w, i) => {
+        const m = { time: (acc / total) * durationMs, group: run.start + i };
+        acc += w;
+        return m;
+      });
+    } else {
+      marks = localMarks;
+    }
   }
-  const startMs = pollyMarks[firstGi].time;
-  const endMs = pollyMarks[lastGi + 1] ? pollyMarks[lastGi + 1].time : (audioPlayer.duration * 1000 || startMs + 3000);
-  loopRunIndex = ri;
-  const btn = document.querySelector(`.repeat-btn[data-run="${ri}"]`);
-  if (btn) btn.classList.add('looping');
-  setReading(true);
-  audioPlayer.currentTime = startMs / 1000;
-  audioPlayer.play();
 
-  // 'timeupdate' 이벤트는 정확도가 낮아서(보통 200~250ms 간격) 구간 끝
-  // 지점을 늦게 감지해 다음 구간 소리가 살짝 들리곤 했어요. 화면이
-  // 갱신될 때마다(약 16ms) 도는 requestAnimationFrame 루프 안에서 직접
-  // 시간을 확인하면 훨씬 정밀하게 끊을 수 있어요.
-  const LOOP_MARGIN_MS = 30; // 약간 일찍 끊어서 다음 구간 소리가 새지 않게
-  const step = () => {
-    const ms = audioPlayer.currentTime * 1000;
-    if (ms >= endMs - LOOP_MARGIN_MS) {
-      // 계속 반복하지 않고 한 번만 재생하고 멈춰요 — 다시 듣고 싶으면
-      // 🔁 버튼을 또 누르면 되니까요.
-      audioPlayer.pause();
-      stopGroupLoop();
-      clearHighlight();
-      setReading(false);
-      return;
-    }
-    let group = -1;
-    for (let i = 0; i < pollyMarks.length; i++) {
-      if (pollyMarks[i].time <= ms) group = pollyMarks[i].group; else break;
-    }
-    if (group >= 0) highlightGroup(group);
-    if (loopRunIndex === ri) rafId = requestAnimationFrame(step);
-  };
-  rafId = requestAnimationFrame(step);
+  const result = { audioUrl, marks };
+  runAudioCache[ri] = result;
+  return result;
+}
+
+function stopRunAudio() {
+  if (runAudioRafId) cancelAnimationFrame(runAudioRafId);
+  runAudioRafId = null;
+  if (runAudioPlayer) runAudioPlayer.pause();
+  if (activeRunAudioIndex !== null) {
+    const btn = document.querySelector(`.repeat-btn[data-run="${activeRunAudioIndex}"]`);
+    if (btn) { btn.classList.remove('looping'); btn.disabled = false; btn.textContent = '🔁'; }
+  }
+  activeRunAudioIndex = null;
+  clearHighlight();
+  setReading(false);
+}
+
+async function startRunLoop(ri) {
+  if (!groupRuns[ri]) return;
+  const wasActive = activeRunAudioIndex === ri;
+  stopRunAudio();
+  if (rafId) cancelAnimationFrame(rafId);
+  audioPlayer.pause();
+  if (wasActive) return; // 같은 버튼을 다시 누르면 멈추기만 해요
+
+  const btn = document.querySelector(`.repeat-btn[data-run="${ri}"]`);
+  activeRunAudioIndex = ri;
+  if (btn) { btn.classList.add('looping'); btn.disabled = true; btn.textContent = '⏳'; }
+  setStatus('구간 음성 준비 중…', '');
+
+  try {
+    const { audioUrl, marks } = await synthesizeRunAudio(ri);
+    if (activeRunAudioIndex !== ri) return; // 로딩 중 취소됨
+    if (btn) { btn.disabled = false; btn.textContent = '🔁'; }
+    setStatus('준비 완료. Play를 눌러 재생하세요.', 'ok');
+
+    if (!runAudioPlayer) runAudioPlayer = new Audio();
+    runAudioPlayer.src = audioUrl;
+    runAudioPlayer.currentTime = 0;
+    setReading(true);
+    clearHighlight();
+    await runAudioPlayer.play();
+
+    const step = () => {
+      if (activeRunAudioIndex !== ri) return;
+      const ms = runAudioPlayer.currentTime * 1000;
+      let group = -1;
+      for (let i = 0; i < marks.length; i++) {
+        if (marks[i].time <= ms) group = marks[i].group; else break;
+      }
+      if (group >= 0) highlightGroup(group);
+      runAudioRafId = requestAnimationFrame(step);
+    };
+    runAudioRafId = requestAnimationFrame(step);
+
+    runAudioPlayer.onended = () => {
+      if (activeRunAudioIndex === ri) stopRunAudio();
+    };
+  } catch (err) {
+    if (btn) { btn.classList.remove('looping'); btn.disabled = false; btn.textContent = '🔁'; }
+    activeRunAudioIndex = null;
+    setStatus(err.message || String(err), 'err');
+  }
 }
 
 function insertRepeatButtons() {
   document.querySelectorAll('.repeat-btn').forEach(b => b.remove());
   groupRuns = computeGroupRuns();
+  runAudioCache = {};
   groupRuns.forEach((run, ri) => {
     const grp = groups[run.end];
     if (!grp || !grp.length) return;
@@ -1380,14 +1501,14 @@ function insertRepeatButtons() {
     btn.className = 'repeat-btn';
     btn.dataset.run = ri;
     btn.textContent = '🔁';
-    btn.title = '이 구간만 반복 재생';
+    btn.title = '이 구간만 따로 재생';
     btn.addEventListener('click', () => startRunLoop(ri));
     grp[grp.length - 1].insertAdjacentElement('afterend', btn);
   });
 }
 
 function stopReading() {
-  stopGroupLoop();
+  stopRunAudio();
   audioPlayer.pause();
   audioPlayer.currentTime = 0;
   if (rafId) cancelAnimationFrame(rafId);
