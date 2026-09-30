@@ -639,9 +639,26 @@
 <audio id="audioPlayer" style="display:none;"></audio>
 <canvas id="videoCanvas" width="720" height="1280" style="display:none;"></canvas>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+/* 이 값들은 비밀번호가 아니라 이 앱의 공개 식별자예요. 실제 접근 제어는
+   Firebase 콘솔의 Firestore 보안 규칙이 담당해요. */
+const firebaseConfig = {
+  apiKey: "AIzaSyAWWg9opxJOtLBOEtybBp5St_Z1iHZgskY",
+  authDomain: "reading-room-dd6da.firebaseapp.com",
+  projectId: "reading-room-dd6da",
+  storageBucket: "reading-room-dd6da.firebasestorage.app",
+  messagingSenderId: "214037117964",
+  appId: "1:214037117964:web:d9834d9e2f628018fe8229",
+  measurementId: "G-QTS0WQ0MD0"
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+const itemsCollection = collection(db, 'items');
+
 const STORAGE_KEY = 'erroom_v1';
-const ITEMS_KEY = 'erroom_items_v1';
 
 const input = document.getElementById('input');
 const itemTitle = document.getElementById('itemTitle');
@@ -805,19 +822,17 @@ updateProviderFields();
 renderElevenVoicePresets();
 updatePlayCountDisplay();
 
-/* ---------- 저장된 목록 (여러 콘텐츠를 카드로 쌓아두고, 눌러서 학습 화면 열기) ---------- */
+/* ---------- 저장된 목록 (Firestore에 저장해서 어떤 기기에서 열어도 같은 목록이 보여요) ---------- */
 let savedItems = [];
 
-function loadItems() {
-  try {
-    const raw = localStorage.getItem(ITEMS_KEY);
-    savedItems = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(savedItems)) savedItems = [];
-  } catch (e) { savedItems = []; }
-}
-
-function saveItems() {
-  try { localStorage.setItem(ITEMS_KEY, JSON.stringify(savedItems)); } catch (e) { /* ignore */ }
+function subscribeItems() {
+  onSnapshot(itemsCollection, (snapshot) => {
+    savedItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    savedItems.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    renderItemList();
+  }, (err) => {
+    setStatus('목록을 불러오지 못했어요: ' + (err.message || err), 'err');
+  });
 }
 
 function renderItemList() {
@@ -829,7 +844,7 @@ function renderItemList() {
     itemListEl.appendChild(empty);
     return;
   }
-  savedItems.slice().reverse().forEach(item => {
+  savedItems.forEach(item => {
     const card = document.createElement('div');
     card.className = 'item-card';
 
@@ -842,12 +857,14 @@ function renderItemList() {
     delBtn.className = 'item-del';
     delBtn.title = '삭제';
     delBtn.textContent = '✕';
-    delBtn.addEventListener('click', (e) => {
+    delBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (!confirm(`"${item.title}" 항목을 목록에서 삭제할까요?`)) return;
-      savedItems = savedItems.filter(it => it.id !== item.id);
-      saveItems();
-      renderItemList();
+      try {
+        await deleteDoc(doc(db, 'items', item.id));
+      } catch (err) {
+        setStatus('삭제하지 못했어요: ' + (err.message || err), 'err');
+      }
     });
 
     card.appendChild(titleSpan);
@@ -873,7 +890,7 @@ function openItem(id) {
   playPolly();
 }
 
-function addItemAndStudy() {
+async function addItemAndStudy() {
   const text = input.value.trim();
   if (!text) {
     setStatus('내용을 먼저 입력해주세요.', 'err');
@@ -881,10 +898,7 @@ function addItemAndStudy() {
   }
   const firstLine = text.split('\n').map(s => s.trim()).find(Boolean) || '제목 없음';
   const title = (itemTitle.value.trim() || firstLine).slice(0, 40);
-  const item = { id: Date.now(), title, text, image: attachedImageData || null };
-  savedItems.push(item);
-  saveItems();
-  renderItemList();
+  const image = attachedImageData || null;
 
   playPolly();
 
@@ -896,10 +910,15 @@ function addItemAndStudy() {
   removeImageBtn.style.display = 'none';
   imageInput.value = '';
   saveState();
+
+  try {
+    await addDoc(itemsCollection, { title, text, image, createdAt: Date.now() });
+  } catch (err) {
+    setStatus('목록 저장에 실패했어요(사진이 너무 크면 실패할 수 있어요): ' + (err.message || err), 'err');
+  }
 }
 
-loadItems();
-renderItemList();
+subscribeItems();
 
 /* 요청에 따라 키를 이 브라우저에 저장합니다. 이 기기를 다른 사람과 같이 쓰거나
    분실 위험이 있다면, AWS IAM 콘솔에서 해당 액세스 키를 비활성화/재발급하면 됩니다. */
