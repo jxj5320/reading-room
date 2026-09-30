@@ -643,7 +643,6 @@ let rafId = null;
 let loopRunIndex = null;
 let groupRuns = [];
 let newlineBeforeGroup = [];
-let loopHandler = null;
 let playCount = 0;
 let audioReady = false;
 
@@ -1300,7 +1299,6 @@ playOverlayBtn.addEventListener('click', async () => {
 });
 
 function stopGroupLoop() {
-  if (loopHandler) { audioPlayer.removeEventListener('timeupdate', loopHandler); loopHandler = null; }
   if (loopRunIndex !== null) {
     const btn = document.querySelector(`.repeat-btn[data-run="${loopRunIndex}"]`);
     if (btn) btn.classList.remove('looping');
@@ -1345,8 +1343,22 @@ function startRunLoop(ri) {
   audioPlayer.currentTime = startMs / 1000;
   audioPlayer.play();
 
+  // 'timeupdate' 이벤트는 정확도가 낮아서(보통 200~250ms 간격) 구간 끝
+  // 지점을 늦게 감지해 다음 구간 소리가 살짝 들리곤 했어요. 화면이
+  // 갱신될 때마다(약 16ms) 도는 requestAnimationFrame 루프 안에서 직접
+  // 시간을 확인하면 훨씬 정밀하게 끊을 수 있어요.
+  const LOOP_MARGIN_MS = 30; // 약간 일찍 끊어서 다음 구간 소리가 새지 않게
   const step = () => {
     const ms = audioPlayer.currentTime * 1000;
+    if (ms >= endMs - LOOP_MARGIN_MS) {
+      // 계속 반복하지 않고 한 번만 재생하고 멈춰요 — 다시 듣고 싶으면
+      // 🔁 버튼을 또 누르면 되니까요.
+      audioPlayer.pause();
+      stopGroupLoop();
+      clearHighlight();
+      setReading(false);
+      return;
+    }
     let group = -1;
     for (let i = 0; i < pollyMarks.length; i++) {
       if (pollyMarks[i].time <= ms) group = pollyMarks[i].group; else break;
@@ -1355,13 +1367,6 @@ function startRunLoop(ri) {
     if (loopRunIndex === ri) rafId = requestAnimationFrame(step);
   };
   rafId = requestAnimationFrame(step);
-
-  loopHandler = () => {
-    if (audioPlayer.currentTime * 1000 >= endMs - 20) {
-      audioPlayer.currentTime = startMs / 1000;
-    }
-  };
-  audioPlayer.addEventListener('timeupdate', loopHandler);
 }
 
 function insertRepeatButtons() {
