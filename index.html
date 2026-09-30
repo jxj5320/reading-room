@@ -302,8 +302,18 @@
 
   .word.en { color: var(--ink); font-weight: 600; }
   .word.ko { color: var(--dim); font-weight: 400; }
-  .word.active { color: #e02424; background: rgba(224, 36, 36, 0.18); }
-  .word.active-ko { background: rgba(224, 36, 36, 0.28); border-radius: 3px; }
+
+  .grp-en, .grp-ko {
+    transition: background-color 0.15s ease;
+    border-radius: 4px;
+    padding: 1px 3px;
+    margin: 0 -3px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .grp-en.active { background: rgba(224, 36, 36, 0.18); }
+  .grp-en.active .word { color: #e02424; }
+  .grp-ko.active { background: rgba(224, 36, 36, 0.28); }
 
   .repeat-btn {
     display: inline-flex;
@@ -528,8 +538,10 @@ let wordSpans = [];
 let spokenSpans = [];
 let spokenIndexToGroup = [];
 let groups = [];
+let groupEls = [];
 let koGroups = [];
 let koGroupSentence = [];
+let koGroupEls = [];
 let groupSentence = [];
 let renderParagraphs = [[]];
 let attachedImageData = null;
@@ -689,31 +701,47 @@ function buildPhrase(text) {
   spokenSpans = [];
   groups = [];
   groupSentence = [];
+  groupEls = [];
   koGroups = [];
   koGroupSentence = [];
+  koGroupEls = [];
   spokenIndexToGroup = [];
   renderParagraphs = [[]];
   let currentGroup = null;
+  let currentGroupEl = null;
   let breakPending = true;
   let sentenceIndex = -1;
   let pendingNewSentence = true;
   let inTranslation = false;
   let currentKoGroup = null;
+  let currentKoGroupEl = null;
   let koBreakPending = true;
+
+  // Whitespace between words belongs inside the current group's wrapper
+  // element (so the highlight background is one continuous block, not one
+  // box per word) whenever we're still in the middle of an English or
+  // Korean group; otherwise it's appended directly to the phrase.
+  function appendPiece(node) {
+    if (currentGroupEl && !breakPending) currentGroupEl.appendChild(node);
+    else if (currentKoGroupEl && inTranslation && !koBreakPending) currentKoGroupEl.appendChild(node);
+    else overlayPhrase.appendChild(node);
+  }
 
   const tokens = text.split(/(\s+)/);
   tokens.forEach(tok => {
     if (tok.trim() === '') {
-      overlayPhrase.appendChild(document.createTextNode(tok));
+      appendPiece(document.createTextNode(tok));
       const breaks = (tok.match(/\n/g) || []).length;
       for (let i = 0; i < breaks; i++) renderParagraphs.push([]);
-      if (breaks >= 2) { pendingNewSentence = true; inTranslation = false; currentKoGroup = null; koBreakPending = true; }
+      if (breaks >= 2) {
+        pendingNewSentence = true; inTranslation = false;
+        currentKoGroup = null; currentKoGroupEl = null; koBreakPending = true;
+      }
       return;
     }
     const span = document.createElement('span');
     span.className = 'word';
     span.textContent = tok;
-    overlayPhrase.appendChild(span);
     wordSpans.push(span);
 
     if (hasLatinLetter(tok)) {
@@ -721,10 +749,15 @@ function buildPhrase(text) {
       if (breakPending || currentGroup === null) {
         currentGroup = [];
         groups.push(currentGroup);
+        currentGroupEl = document.createElement('span');
+        currentGroupEl.className = 'grp-en';
+        overlayPhrase.appendChild(currentGroupEl);
+        groupEls.push(currentGroupEl);
         breakPending = false;
         if (pendingNewSentence) { sentenceIndex++; pendingNewSentence = false; }
         groupSentence.push(sentenceIndex);
       }
+      currentGroupEl.appendChild(span);
       currentGroup.push(span);
       spokenSpans.push(span);
       spokenIndexToGroup.push(groups.length - 1);
@@ -742,19 +775,29 @@ function buildPhrase(text) {
       if (tok.trim().includes('→')) {
         inTranslation = true;
         currentKoGroup = null;
+        currentKoGroupEl = null;
         koBreakPending = true;
+        overlayPhrase.appendChild(span);
       } else if (inTranslation) {
         if (tok.trim() === '/') {
           koBreakPending = true;
+          overlayPhrase.appendChild(span);
         } else {
           if (koBreakPending || currentKoGroup === null) {
             currentKoGroup = [];
             koGroups.push(currentKoGroup);
             koGroupSentence.push(sentenceIndex);
+            currentKoGroupEl = document.createElement('span');
+            currentKoGroupEl.className = 'grp-ko';
+            overlayPhrase.appendChild(currentKoGroupEl);
+            koGroupEls.push(currentKoGroupEl);
             koBreakPending = false;
           }
+          currentKoGroupEl.appendChild(span);
           currentKoGroup.push(span);
         }
+      } else {
+        overlayPhrase.appendChild(span);
       }
 
       renderParagraphs[renderParagraphs.length - 1].push({ text: tok, cls: 'ko', group: -1 });
@@ -763,18 +806,14 @@ function buildPhrase(text) {
 }
 
 function clearHighlight() {
-  wordSpans.forEach(s => s.classList.remove('active', 'active-ko'));
+  groupEls.forEach(el => el.classList.remove('active'));
+  koGroupEls.forEach(el => el.classList.remove('active'));
 }
 
 function highlightGroup(activeGroup) {
-  groups.forEach((grp, gi) => {
-    grp.forEach(span => {
-      if (gi === activeGroup) span.classList.add('active');
-      else span.classList.remove('active');
-    });
-  });
+  groupEls.forEach((el, gi) => el.classList.toggle('active', gi === activeGroup));
 
-  koGroups.forEach(grp => grp.forEach(span => span.classList.remove('active-ko')));
+  koGroupEls.forEach(el => el.classList.remove('active'));
   if (activeGroup >= 0 && groupSentence[activeGroup] != null) {
     const si = groupSentence[activeGroup];
     const localIdx = groups.reduce((count, g, gi) => {
@@ -784,7 +823,7 @@ function highlightGroup(activeGroup) {
     const koIndicesForSentence = koGroupSentence.reduce((arr, s, ki) => { if (s === si) arr.push(ki); return arr; }, []);
     const koIdx = koIndicesForSentence[localIdx];
     if (koIdx != null) {
-      koGroups[koIdx].forEach(span => span.classList.add('active-ko'));
+      koGroupEls[koIdx].classList.add('active');
     }
   }
 }
