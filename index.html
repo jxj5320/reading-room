@@ -268,11 +268,35 @@
     margin-top: 28px;
   }
 
+  .list-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
   .list-section h2 {
     font-family: 'Source Serif 4', serif;
     font-size: 16px;
     font-weight: 600;
-    margin: 0 0 10px;
+    margin: 0;
+  }
+
+  .list-edit-btn {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+  }
+
+  .list-edit-btn.active {
+    border-color: var(--err);
+    color: var(--err);
   }
 
   .item-list {
@@ -605,7 +629,10 @@
   </div>
 
   <div class="list-section">
-    <h2>저장된 목록</h2>
+    <div class="list-section-head">
+      <h2>저장된 목록</h2>
+      <button type="button" class="list-edit-btn" id="listEditBtn">편집</button>
+    </div>
     <div class="item-list" id="itemList"></div>
   </div>
 
@@ -663,6 +690,7 @@ const STORAGE_KEY = 'erroom_v1';
 const input = document.getElementById('input');
 const itemTitle = document.getElementById('itemTitle');
 const itemListEl = document.getElementById('itemList');
+const listEditBtn = document.getElementById('listEditBtn');
 const playBtn = document.getElementById('playBtn');
 const stopBtn = document.getElementById('stopBtn');
 const downloadBtn = document.getElementById('downloadBtn');
@@ -824,6 +852,14 @@ updatePlayCountDisplay();
 
 /* ---------- 저장된 목록 (Firestore에 저장해서 어떤 기기에서 열어도 같은 목록이 보여요) ---------- */
 let savedItems = [];
+let listEditMode = false;
+
+listEditBtn.addEventListener('click', () => {
+  listEditMode = !listEditMode;
+  listEditBtn.textContent = listEditMode ? '완료' : '편집';
+  listEditBtn.classList.toggle('active', listEditMode);
+  renderItemList();
+});
 
 function subscribeItems() {
   onSnapshot(itemsCollection, (snapshot) => {
@@ -852,24 +888,30 @@ function renderItemList() {
     titleSpan.className = 'item-title';
     titleSpan.textContent = item.title;
 
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'item-del';
-    delBtn.title = '삭제';
-    delBtn.textContent = '✕';
-    delBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (!confirm(`"${item.title}" 항목을 목록에서 삭제할까요?`)) return;
-      try {
-        await deleteDoc(doc(db, 'items', item.id));
-      } catch (err) {
-        setStatus('삭제하지 못했어요: ' + (err.message || err), 'err');
-      }
-    });
-
     card.appendChild(titleSpan);
-    card.appendChild(delBtn);
-    card.addEventListener('click', () => openItem(item.id));
+
+    if (listEditMode) {
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'item-del';
+      delBtn.title = '삭제';
+      delBtn.textContent = '✕';
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`"${item.title}" 항목을 목록에서 삭제할까요?`)) return;
+        try {
+          await deleteDoc(doc(db, 'items', item.id));
+        } catch (err) {
+          setStatus('삭제하지 못했어요: ' + (err.message || err), 'err');
+        }
+      });
+      card.appendChild(delBtn);
+    }
+
+    card.addEventListener('click', () => {
+      if (listEditMode) return;
+      openItem(item.id);
+    });
     itemListEl.appendChild(card);
   });
 }
