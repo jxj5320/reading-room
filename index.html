@@ -49,8 +49,9 @@
 
   header .left {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
   }
 
   header h1 {
@@ -63,6 +64,24 @@
   header span.status {
     font-size: 12px;
     color: var(--dim);
+  }
+
+  .link-copy-btn {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .link-copy-btn.copied {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .gear-btn {
@@ -479,7 +498,7 @@
     <div class="left">
       <h1>English Reading Room</h1>
       <span class="status" id="status">idle</span>
-      <span class="status" id="playCountEl">재생 0회</span>
+      <button type="button" class="link-copy-btn" id="linkCopyBtn">🔗 링크 복사</button>
     </div>
     <button class="gear-btn" id="gearBtn" title="Polly 설정">⚙</button>
   </header>
@@ -720,7 +739,7 @@ const pollyRegion = document.getElementById('pollyRegion');
 const pollyEngine = document.getElementById('pollyEngine');
 const pollyVoice = document.getElementById('pollyVoice');
 const playOverlayBtn = document.getElementById('playOverlayBtn');
-const playCountEl = document.getElementById('playCountEl');
+const linkCopyBtn = document.getElementById('linkCopyBtn');
 const pollyAccessKey = document.getElementById('pollyAccessKey');
 const pollySecretKey = document.getElementById('pollySecretKey');
 const ttsProvider = document.getElementById('ttsProvider');
@@ -798,8 +817,36 @@ let playCount = 0;
 let audioReady = false;
 
 function updatePlayCountDisplay() {
-  playCountEl.textContent = `재생 ${playCount}회`;
+  /* 재생 횟수 표시는 제거했지만, 값 자체는 계속 저장해둬요(나중에 다시 쓸 수도 있으니). */
 }
+
+linkCopyBtn.addEventListener('click', async () => {
+  const url = window.location.href;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const temp = document.createElement('textarea');
+      temp.value = url;
+      temp.style.position = 'fixed';
+      temp.style.opacity = '0';
+      document.body.appendChild(temp);
+      temp.focus();
+      temp.select();
+      document.execCommand('copy');
+      document.body.removeChild(temp);
+    }
+    const original = linkCopyBtn.textContent;
+    linkCopyBtn.textContent = '복사됨!';
+    linkCopyBtn.classList.add('copied');
+    setTimeout(() => {
+      linkCopyBtn.textContent = original;
+      linkCopyBtn.classList.remove('copied');
+    }, 1500);
+  } catch (e) {
+    setStatus('링크 복사에 실패했어요. 주소창의 링크를 직접 복사해주세요.', 'err');
+  }
+});
 
 /* ---------- persistence (text, image, settings — never the AWS keys) ---------- */
 function saveState() {
